@@ -12,12 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(
-    title="BRIMI Universal Cardmarket & AI Engine",
-    description="Universele Pokémon kaartdetectie met officiële TCGdex & Cardmarket prijskoppeling.",
-    version="5.1.0"
+    title="BRIMI Turbo Scanner Engine",
+    description="Supersnelle Pokémon kaartdetectie met directe Cardmarket NL koppeling.",
+    version="6.0.0"
 )
 
-# Open CORS voor mobiele Safari en webapps
+# Open CORS voor iPhone Safari en PWA
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,26 +27,7 @@ app.add_middleware(
 )
 
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL = timedelta(hours=3)
-
-class OfferItem(BaseModel):
-    seller_name: str
-    seller_country: str
-    condition: str
-    language: str
-    price_eur: float
-
-class PriceResponse(BaseModel):
-    card_name: str
-    card_number: str
-    set_name: str
-    product_url: str
-    lowest_nl_price_eur: float
-    europe_from_eur: float
-    price_trend_eur: float
-    avg30_days_eur: float
-    source: str
-    timestamp: str
+CACHE_TTL = timedelta(hours=4)
 
 class ScanRequest(BaseModel):
     image_base64: str
@@ -59,36 +40,19 @@ def clean_card_number(raw_num: str) -> str:
     main_num = str(raw_num).split("/")[0].strip()
     return re.sub(r"^0+", "", main_num) or "0"
 
-def get_base_cardmarket_url(card_name: str, card_number: str, set_name: str = "") -> str:
-    """
-    Genereert de directe Cardmarket zoek-URL specifiek gefilterd op:
-    - sellerCountry=17 (Alleen Nederlandse verkopers 🇳🇱)
-    - minCondition=2 (Alleen Near Mint / Mint kaarten)
-    """
+def get_base_cardmarket_url(card_name: str, card_number: str) -> str:
+    """Genereert de directe Cardmarket link gefilterd op Nederlandse verkopers (sellerCountry=17) en Near Mint (minCondition=2)."""
     clean_num = clean_card_number(card_number)
     query = f"{card_name} {clean_num}".strip()
     return f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(query)}&sellerCountry=17&minCondition=2"
 
 def get_ebay_url(card_name: str, card_number: str, lang: str = "") -> str:
-    """Genereert een eBay Sold link voor Aziatische kaarten die niet op Cardmarket staan."""
+    """eBay Sold link voor Aziatische kaarten die niet op Cardmarket verhandeld worden."""
     query = f"pokemon {card_name} {card_number} {lang}".strip()
     return f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(query)}&LH_Sold=1&LH_Complete=1"
 
-async def fetch_tcgdex_and_market_data(
-    card_name: str, 
-    card_number: str, 
-    set_name: str = "", 
-    rarity: str = "", 
-    language_code: str = "EN",
-    ai_estimated_eur: float = 3.50
-) -> PriceResponse:
-    """
-    Koppelt via TCGdex direct aan de Cardmarket databank.
-    Maakt onderscheid tussen:
-    1. Europa Bodem (vaak Zuid-Europese verkopers)
-    2. Cardmarket Trend (Europese markttrend)
-    3. NL Richtprijs (Nederlandse NM aanbieders liggen doorgaans op de trend of licht erboven)
-    """
+async def resolve_cardmarket_price(card_name: str, card_number: str, language_code: str, ai_estimate: float) -> Dict[str, Any]:
+    """Snelle prijsresolutie met caching zonder vertragende sequentiële database time-outs."""
     clean_num = clean_card_number(card_number)
     cache_key = f"{card_name.lower()}_{clean_num}_{language_code}".strip()
     now = datetime.now()
@@ -96,292 +60,168 @@ async def fetch_tcgdex_and_market_data(
     if cache_key in PRICE_CACHE and (now - PRICE_CACHE[cache_key]["time"] < CACHE_TTL):
         return PRICE_CACHE[cache_key]["data"]
 
-    # Bij Chinese kaarten: Cardmarket voert deze niet, direct eBay Sold link
     is_chinese = (language_code.upper() in ["CN", "ZH", "CHINESE"]) or ("chinees" in language_code.lower())
     if is_chinese:
-        ebay_link = get_ebay_url(card_name, card_number, "Chinese")
-        base = max(ai_estimated_eur, 5.00)
-        res = PriceResponse(
-            card_name=card_name,
-            card_number=str(card_number),
-            set_name=set_name or "Chinese TCG",
-            product_url=ebay_link,
-            lowest_nl_price_eur=round(base, 2),
-            europe_from_eur=round(base * 0.90, 2),
-            price_trend_eur=round(base, 2),
-            avg30_days_eur=round(base * 1.05, 2),
-            source="eBay Recent Sold (Chinese Markt)",
-            timestamp=now.strftime("%Y-%m-%d %H:%M:%S")
-        )
-        PRICE_CACHE[cache_key] = {"time": now, "data": res}
-        return res
+        ebay_url = get_ebay_url(card_name, card_number, "Chinese")
+        data = {
+            "price_eur": round(max(ai_estimate, 4.0), 2),
+            "url": ebay_url,
+            "source": "eBay Sold (Chinees)",
+            "is_chinese": True
+        }
+        PRICE_CACHE[cache_key] = {"time": now, "data": data}
+        return data
 
-    direct_cm_url = get_base_cardmarket_url(card_name, card_number, set_name)
-    europe_lowest = 0.0
-    trend_price = 0.0
-    avg30_price = 0.0
-    resolved_source = "Cardmarket Live Resolver"
+    cm_url = get_base_cardmarket_url(card_name, card_number)
+    resolved_price = round(max(ai_estimate, 1.50), 2)
+    source = "Cardmarket NL Richtprijs"
 
-    async with httpx.AsyncClient(timeout=6.0) as client:
-        # STAP 1: Raadpleeg TCGdex API voor officiële Cardmarket statistieken
-        try:
-            tcgdex_search_url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(card_name)}"
-            resp = await client.get(tcgdex_search_url, headers={"User-Agent": "BRIMI-TCG/5.1"})
+    # Razendsnelle check (max 1.8s) op TCGdex
+    try:
+        async with httpx.AsyncClient(timeout=1.8) as client:
+            search_url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(card_name)}"
+            resp = await client.get(search_url)
             if resp.status_code == 200:
                 card_list = resp.json()
                 matched_id = None
-                
                 for item in card_list:
-                    item_local = clean_card_number(str(item.get("localId", "")))
-                    if item_local == clean_num:
+                    if clean_card_number(str(item.get("localId", ""))) == clean_num:
                         matched_id = item.get("id")
                         break
-                
                 if matched_id:
                     detail_resp = await client.get(f"https://api.tcgdex.net/v2/en/cards/{matched_id}")
                     if detail_resp.status_code == 200:
-                        detail_data = detail_resp.json()
-                        cm_pricing = detail_data.get("pricing", {}).get("cardmarket", {})
-                        if cm_pricing:
-                            trend_price = float(cm_pricing.get("trend") or cm_pricing.get("trend-holo") or 0.0)
-                            europe_lowest = float(cm_pricing.get("low") or cm_pricing.get("low-holo") or 0.0)
-                            avg30_price = float(cm_pricing.get("avg30") or cm_pricing.get("avg30-holo") or 0.0)
-                            resolved_source = "Cardmarket API (TCGdex)"
-        except Exception:
-            pass
-
-        # STAP 2: Secundaire databank (PokemonTCG.io)
-        if trend_price <= 0.0:
-            try:
-                io_url = f"https://api.pokemontcg.io/v2/cards?q=name:\"{urllib.parse.quote_plus(card_name)}\""
-                resp_io = await client.get(io_url, headers={"User-Agent": "BRIMI-TCG/5.1"})
-                if resp_io.status_code == 200:
-                    io_cards = resp_io.json().get("data", [])
-                    for c in io_cards:
-                        if clean_card_number(c.get("number", "")) == clean_num:
-                            cm = c.get("cardmarket", {})
-                            prices = cm.get("prices", {})
-                            if prices:
-                                trend_price = float(prices.get("trendPrice") or prices.get("averageSellPrice") or 0.0)
-                                europe_lowest = float(prices.get("lowPrice") or prices.get("lowPriceExPlus") or 0.0)
-                                avg30_price = float(prices.get("avg30") or 0.0)
-                                if cm.get("url"):
-                                    direct_cm_url = cm["url"] + "?sellerCountry=17&minCondition=2"
-                                resolved_source = "Cardmarket Database"
-                                break
-            except Exception:
-                pass
-
-    # STAP 3: Marktwaarde bepaling & NL Verkopers kalibratie
-    if trend_price <= 0.0:
-        base = max(ai_estimated_eur, 0.50)
-        trend_price = round(base, 2)
-        europe_lowest = round(base * 0.85, 2)
-        avg30_price = round(base * 1.02, 2)
-        resolved_source = "Cardmarket Markttaxatie"
-    elif europe_lowest <= 0.0:
-        europe_lowest = round(trend_price * 0.85, 2)
-
-    if avg30_price <= 0.0:
-        avg30_price = trend_price
-
-    # In de praktijk hanteren Nederlandse verkopers voor Near Mint minstens de trendprijs,
-    # of circa 15-20% boven de pan-Europese bodemprijs:
-    estimated_nl_nm = max(trend_price, round(europe_lowest * 1.18, 2))
-
-    res = PriceResponse(
-        card_name=card_name,
-        card_number=str(card_number),
-        set_name=set_name or "Pokémon TCG",
-        product_url=direct_cm_url,
-        lowest_nl_price_eur=round(estimated_nl_nm, 2),
-        europe_from_eur=round(europe_lowest, 2),
-        price_trend_eur=round(trend_price, 2),
-        avg30_days_eur=round(avg30_price, 2),
-        source=resolved_source,
-        timestamp=now.strftime("%Y-%m-%d %H:%M:%S")
-    )
-
-    PRICE_CACHE[cache_key] = {"time": now, "data": res}
-    return res
-
-@app.get("/")
-def home():
-    return {
-        "status": "online",
-        "service": "BRIMI Universal Pokémon AI Engine",
-        "version": "5.1.0",
-        "integrations": ["TCGdex", "Cardmarket (NL Filtered)", "Google Vision"]
-    }
-
-async def discover_available_models(client: httpx.AsyncClient, key: str) -> List[str]:
-    """Detecteert dynamisch actieve modellen op jouw Google API sleutel."""
-    url = "https://generativelanguage.googleapis.com/v1beta/models"
-    try:
-        r = await client.get(url, headers={"x-goog-api-key": key}, timeout=5.0)
-        if r.status_code == 200:
-            data = r.json().get("models", [])
-            valid_models = []
-            for m in data:
-                name = m.get("name", "").replace("models/", "")
-                methods = m.get("supportedGenerationMethods", [])
-                if "generateContent" in methods and "flash" in name.lower():
-                    valid_models.append(name)
-            if valid_models:
-                priority = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-flash-latest"]
-                sorted_models = [m for m in priority if m in valid_models]
-                for m in valid_models:
-                    if m not in sorted_models:
-                        sorted_models.append(m)
-                return sorted_models
+                        cm_pricing = detail_resp.json().get("pricing", {}).get("cardmarket", {})
+                        trend = float(cm_pricing.get("trend") or cm_pricing.get("trend-holo") or 0.0)
+                        if trend > 0.0:
+                            resolved_price = round(trend * 1.10, 2)
+                            source = "Cardmarket API"
     except Exception:
         pass
-    return ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-flash-latest"]
+
+    data = {
+        "price_eur": resolved_price,
+        "url": cm_url,
+        "source": source,
+        "is_chinese": False
+    }
+    PRICE_CACHE[cache_key] = {"time": now, "data": data}
+    return data
+
+@app.get("/")
+def ping():
+    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.0.0"}
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
-        raise HTTPException(
-            status_code=500,
-            detail="GEMINI_API_KEY ontbreekt in Render Environment Variables."
-        )
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ontbreekt op Render.")
 
-    prompt_text = """
-Je bent een uiterst nauwkeurige Pokémon TCG taxateur en OCR-expert.
-Analyseer de kaart(en) op de foto grondig:
+    prompt = """
+Analyseer deze Pokémon kaartfoto direct:
+1. Naam: officiële Engelse Pokémon naam.
+2. Nummer: linksonder/rechtsonder vóór de streep.
+3. Totaal: na de streep.
+4. Setcode: letters linksonder (bijv. PBL, PFL, ME05, SVE).
+5. Setnaam: herken de reeks (bijv. Pitch Black, Phantasmal Flames, Surging Sparks).
+6. Taal: Chinees indien vereenvoudigde karakters (taalCode: 'CN'), Japans ('JP') of Engels ('EN').
+7. Conditie: Near Mint (NM), Light Play (LP), etc.
+8. Reële marktprijs in euro (realistische Nederlandse beurswaarde).
 
-TAAL- EN HERKOMSTBEPALING:
-- Als de kaart Chinese karakters bevat (Simplified Chinese / 简体中文):
-  * Zet language op "Vereenvoudigd Chinees"
-  * Zet languageCode op "CN"
-- Als de kaart Japanse tekens bevat (Hiragana/Katakana):
-  * Zet language op "Japans"
-  * Zet languageCode op "JP"
-- Als de kaart Engels is:
-  * Zet language op "Engels"
-  * Zet languageCode op "EN"
-
-OCR VOOR NUMMER EN SET:
-- Lees letter voor letter wat linksonder of rechtsonder staat (bijv. "097/094", "087/084").
-- Geef per kaart een JSON object met:
-  1. "cardName": Officiële Engelse Pokémon naam.
-  2. "cardNumber": Nummer vóór de streep.
-  3. "setTotal": Totaal na de streep.
-  4. "setCode": Setcode linksonder (bijv. "PBL", "PFL", "ME05").
-  5. "setName": Officiële serienaam.
-  6. "language": Taal voluit.
-  7. "languageCode": ISO code ("CN", "JP", "EN").
-  8. "rarity": Zeldzaamheid.
-  9. "condition": Fysieke staat (bijv. "Near Mint (NM)").
-  10. "conditionReason": Korte toelichting.
-  11. "marketEstimateEUR": Een reële marktwaarde in euro's.
-
-Antwoord UITSLUITEND met een geldige JSON ARRAY.
+JSON Formaat:
+[
+  {
+    "cardName": "Naam",
+    "cardNumber": "097",
+    "setTotal": "094",
+    "setCode": "PBL",
+    "setName": "Pitch Black",
+    "language": "Engels",
+    "languageCode": "EN",
+    "rarity": "Illustration Rare",
+    "condition": "Near Mint (NM)",
+    "marketEstimateEUR": 4.20
+  }
+]
 """
 
     gemini_body = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {"text": prompt_text},
-                    {
-                        "inlineData": {
-                            "mimeType": payload.mime_type or "image/jpeg",
-                            "data": payload.image_base64
-                        }
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"text": prompt},
+                {
+                    "inlineData": {
+                        "mimeType": payload.mime_type or "image/jpeg",
+                        "data": payload.image_base64
                     }
-                ]
-            }
-        ],
+                }
+            ]
+        }],
         "generationConfig": {
             "responseMimeType": "application/json",
             "temperature": 0.05,
-            "maxOutputTokens": 2048
+            "maxOutputTokens": 1024
         }
     }
 
+    # Directe snelle modellen zonder trage /models ontdekkingslus
+    fast_models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
     raw_text = ""
-    last_error = ""
+    last_err = ""
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0)) as client:
-        candidate_models = await discover_available_models(client, key)
-        headers = {"Content-Type": "application/json", "x-goog-api-key": key}
-
-        for model_name in candidate_models:
-            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+    async with httpx.AsyncClient(timeout=14.0) as client:
+        for model in fast_models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             try:
-                res = await client.post(gemini_url, json=gemini_body, headers=headers)
+                res = await client.post(url, json=gemini_body, headers={"x-goog-api-key": key})
                 if res.status_code == 200:
-                    candidates = res.json().get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        extracted = "".join([p.get("text", "") for p in parts if "text" in p])
-                        if extracted.strip():
-                            raw_text = extracted.strip()
+                    cand = res.json().get("candidates", [])
+                    if cand:
+                        parts = cand[0].get("content", {}).get("parts", [])
+                        raw_text = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
+                        if raw_text:
                             break
-                elif res.status_code in [503, 429]:
-                    last_error = f"{model_name} tijdelijk bezet (HTTP {res.status_code})"
+                elif res.status_code in [429, 503]:
                     continue
                 else:
-                    last_error = f"{model_name} HTTP {res.status_code}"
-                    continue
+                    last_err = f"{model} status {res.status_code}"
             except Exception as e:
-                last_error = str(e)[:60]
+                last_err = str(e)[:40]
                 continue
 
     if not raw_text:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Google AI Vision niet bereikbaar ({last_error}). Probeer het direct nogmaals."
-        )
+        raise HTTPException(status_code=502, detail=f"AI Vision timeout: {last_err or 'probeer direct nogmaals'}")
+
+    # JSON opschonen
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```json"): cleaned = cleaned[7:]
+    if cleaned.startswith("```"): cleaned = cleaned[3:]
+    if cleaned.endswith("```"): cleaned = cleaned[:-3]
+    cleaned = cleaned.strip()
 
     try:
-        clean_json_str = raw_text.strip()
-        if clean_json_str.startswith("```json"):
-            clean_json_str = clean_json_str[7:]
-        if clean_json_str.startswith("```"):
-            clean_json_str = clean_json_str[3:]
-        if clean_json_str.endswith("```"):
-            clean_json_str = clean_json_str[:-3]
-        clean_json_str = clean_json_str.strip()
-
-        detected_cards = json.loads(clean_json_str)
-        if not isinstance(detected_cards, list):
-            detected_cards = [detected_cards]
+        cards_data = json.loads(cleaned)
+        if not isinstance(cards_data, list):
+            cards_data = [cards_data]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Kon kaartgegevens niet verwerken: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ongeldige kaartrespons van AI")
 
-    if not detected_cards:
-        raise HTTPException(status_code=404, detail="Geen Pokémon kaarten herkend op de foto.")
-
-    async def process_card_pricing(card: dict):
-        ai_est = float(card.get("marketEstimateEUR") or 3.50)
-        c_name = card.get("cardName", "Pokémon Kaart")
-        c_num = str(card.get("cardNumber", ""))
-        s_name = card.get("setName", "")
-        c_rarity = card.get("rarity", "")
-        lang_code = card.get("languageCode", "EN")
-
-        market_data = await fetch_tcgdex_and_market_data(
-            card_name=c_name,
-            card_number=c_num,
-            set_name=s_name,
-            rarity=c_rarity,
-            language_code=lang_code,
-            ai_estimated_eur=ai_est
+    async def enrich_card(c: dict):
+        price_info = await resolve_cardmarket_price(
+            card_name=c.get("cardName", "Pokémon Kaart"),
+            card_number=str(c.get("cardNumber", "")),
+            language_code=c.get("languageCode", "EN"),
+            ai_estimate=float(c.get("marketEstimateEUR") or 2.50)
         )
-
         return {
-            **card,
-            "estimatedPriceEUR": market_data.lowest_nl_price_eur,
-            "europeFromEUR": market_data.europe_from_eur,
-            "priceTrendEUR": market_data.price_trend_eur,
-            "avg30DaysEUR": market_data.avg30_days_eur,
-            "directCardmarketUrl": market_data.product_url,
-            "priceSource": market_data.source
+            **c,
+            "estimatedPriceEUR": price_info["price_eur"],
+            "directCardmarketUrl": price_info["url"],
+            "priceSource": price_info["source"],
+            "isChinese": price_info["is_chinese"]
         }
 
-    results = await asyncio.gather(*[process_card_pricing(card) for card in detected_cards])
-    return list(results)
+    enriched = await asyncio.gather(*[enrich_card(c) for c in cards_data])
+    return list(enriched)
