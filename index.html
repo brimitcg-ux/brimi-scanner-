@@ -55,7 +55,6 @@
             box-shadow: 0 24px 60px -15px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
         }
 
-        /* Subtiele gloed op interactieve elementen */
         .glow-accent {
             box-shadow: 0 0 24px rgba(56, 189, 248, 0.15);
         }
@@ -133,14 +132,20 @@
 </head>
 <body class="font-sans antialiased flex flex-col justify-between selection:bg-night-accent selection:text-white pb-10">
 
-    <!-- MODERNE NIGHTBLUE HEADER -->
+    <!-- NIGHTBLUE HEADER -->
     <header class="border-b border-night-border/40 bg-night-base/80 backdrop-blur-2xl sticky top-0 z-40">
         <div class="max-w-2xl mx-auto px-4 py-3.5 flex justify-between items-center">
             
             <!-- BRIMI Merklogo -->
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl border border-night-border bg-night-deep flex items-center justify-center text-white shadow-inner">
-                    <i class="fa-solid fa-camera-viewfinder text-sm text-night-light"></i>
+                    <!-- TCG Trading Cards Icoon -->
+                    <svg class="w-5 h-5 text-night-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2.5" y="5.5" width="12" height="16" rx="2" transform="rotate(-8 8.5 13.5)" stroke-opacity="0.45" />
+                        <rect x="8" y="3" width="13" height="17" rx="2" fill="rgba(116, 138, 168, 0.12)" />
+                        <path d="M12 9.5h5M12 12.5h3" stroke-width="1.5" stroke-opacity="0.7" />
+                        <circle cx="14.5" cy="15.5" r="1.5" fill="currentColor" fill-opacity="0.4" />
+                    </svg>
                 </div>
                 <div class="flex flex-col">
                     <div class="flex items-baseline">
@@ -159,16 +164,16 @@
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span class="font-extrabold text-slate-200 text-[11px] tracking-wide">NL Verkopers</span>
+                <span class="font-extrabold text-slate-200 text-[11px] tracking-wide">Filter on: Cardmarket Nederland</span>
             </div>
 
         </div>
     </header>
 
-    <!-- HOOFD-SCANNER VIEWPORT -->
+    <!-- HOOFD VIEWPORT -->
     <main class="max-w-2xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-6">
 
-        <!-- Krachtige titel & intro -->
+        <!-- Titel & Subtitel -->
         <div class="text-center space-y-1">
             <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
                 Scan je kaart. Check de NL prijs.
@@ -224,7 +229,7 @@
                 <i class="fa-solid fa-circle-notch fa-spin text-white text-sm"></i>
                 <h3 id="status-title" class="text-xs font-black tracking-wider text-white uppercase">Kaart analyseren...</h3>
             </div>
-            <p id="status-subtitle" class="text-[11px] text-night-slate">AI herkent serie, nummer en checkt Cardmarket NL...</p>
+            <p id="status-subtitle" class="text-[11px] text-night-slate">Leest serie, nummer en checkt Cardmarket NL...</p>
             <div class="w-full bg-night-deep rounded-full h-1.5 overflow-hidden border border-night-border/30">
                 <div id="progress-bar" class="h-full bg-white transition-all duration-300 rounded-full" style="width: 45%"></div>
             </div>
@@ -233,22 +238,28 @@
         <!-- RESULTATEN PANEEL -->
         <div id="results-panel" class="hidden w-full space-y-4">
             
-            <div class="flex items-center justify-between px-1">
+            <div class="flex items-center justify-between px-1 gap-2 flex-wrap">
                 <span class="text-xs font-black tracking-wider uppercase text-night-light flex items-center gap-2">
                     <i class="fa-solid fa-circle-check text-emerald-400"></i>
-                    <span>Scan Resultaat</span>
+                    <span id="results-count-label">Scan Resultaat</span>
                 </span>
-                <button type="button" id="btn-reset" class="bg-night-deep hover:bg-night-surface text-slate-300 text-xs font-bold px-3.5 py-1.5 rounded-xl border border-night-border transition flex items-center gap-1.5 cursor-pointer">
-                    <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Nieuwe Scan
-                </button>
+                
+                <div class="flex items-center gap-2">
+                    <button type="button" id="btn-share-all" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl border border-emerald-400/30 transition flex items-center gap-1.5 cursor-pointer shadow-md">
+                        <i class="fa-brands fa-whatsapp"></i> Bied Alles Aan
+                    </button>
+                    <button type="button" id="btn-reset" class="bg-night-deep hover:bg-night-surface text-slate-300 text-xs font-bold px-3.5 py-1.5 rounded-xl border border-night-border transition flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Nieuwe Scan
+                    </button>
+                </div>
             </div>
 
-            <!-- Dynamische Kaart container -->
+            <!-- Dynamische Kaarten container -->
             <div id="cards-container" class="space-y-4"></div>
 
         </div>
 
-        <!-- 3 KRACHTIGE REDENEN IN MODERNE NIGHTBLUE CARDS -->
+        <!-- 3 KRACHTIGE REDENEN IN NIGHTBLUE CARDS -->
         <div class="pt-4 border-t border-night-border/40 space-y-3">
             <div class="text-center">
                 <h3 class="text-[11px] font-black uppercase tracking-widest text-night-slate">Waarom BRIMI Scanner?</h3>
@@ -278,14 +289,14 @@
                     </p>
                 </div>
 
-                <!-- Reden 3: Eén Tik Deelknop -->
+                <!-- Reden 3: Eén Tik Community Aanbod -->
                 <div class="glass-panel rounded-2xl p-4 space-y-2 border border-night-border/60">
                     <div class="w-8 h-8 rounded-xl bg-night-deep border border-night-border text-emerald-400 flex items-center justify-center text-xs">
                         <i class="fa-brands fa-whatsapp text-sm"></i>
                     </div>
-                    <h4 class="text-xs font-black text-white">1-Tik WhatsApp Deelknop</h4>
+                    <h4 class="text-xs font-black text-white">1-Tik Community Aanbod</h4>
                     <p class="text-[11px] text-slate-300 leading-relaxed">
-                        Verse pull gescoord? Deel hem met één tik compleet met foto en actuele waarde in je vriendengroep.
+                        Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief vraagprijs, conditie en Cardmarket link.
                     </p>
                 </div>
 
@@ -298,8 +309,8 @@
     <div id="price-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
         <div class="glass-panel max-w-xs w-full rounded-2xl p-5 text-center space-y-4 shadow-2xl border border-night-border">
             <div class="space-y-1">
-                <h4 class="text-sm font-black text-white">Pas Prijs Aan</h4>
-                <p class="text-[11px] text-night-slate" id="price-modal-card-name">Wat is de prijs op Cardmarket?</p>
+                <h4 class="text-sm font-black text-white">Pas Vraagprijs Aan</h4>
+                <p class="text-[11px] text-night-slate" id="price-modal-card-name">Wat vraag je voor de kaart?</p>
             </div>
 
             <div class="relative">
@@ -345,6 +356,8 @@
         const scanningState = document.getElementById('scanning-state');
         const resultsPanel = document.getElementById('results-panel');
         const cardsContainer = document.getElementById('cards-container');
+        const resultsCountLabel = document.getElementById('results-count-label');
+        const btnShareAll = document.getElementById('btn-share-all');
         const statusTitle = document.getElementById('status-title');
         const statusSubtitle = document.getElementById('status-subtitle');
         const progressBar = document.getElementById('progress-bar');
@@ -395,7 +408,7 @@
             if (e.target.files && e.target.files.length > 0) {
                 const file = e.target.files[0];
                 if (!file.type.startsWith('image/')) {
-                    showNotification('Ongeldig bestand', 'Selecteer een duidelijke foto van je Pokémon kaart.');
+                    showNotification('Ongeldig bestand', 'Selecteer een duidelijke foto van je Pokémon kaart(en).');
                     return;
                 }
 
@@ -445,7 +458,7 @@
             cardsContainer.innerHTML = '';
 
             statusTitle.textContent = "Analyseren...";
-            statusSubtitle.textContent = "AI leest setnummer & zoekt Nederlandse Cardmarket prijzen...";
+            statusSubtitle.textContent = "Leest setnummer & checkt Cardmarket NL prijzen...";
             progressBar.style.width = "40%";
 
             try {
@@ -497,11 +510,20 @@
             resultsPanel.classList.remove('hidden');
             cardsContainer.innerHTML = '';
 
+            const totalCards = cards.length;
+            resultsCountLabel.textContent = totalCards === 1 ? '1 Kaart Gevonden' : `${totalCards} Kaarten Gevonden`;
+
+            if (totalCards > 1) {
+                btnShareAll.classList.remove('hidden');
+            } else {
+                btnShareAll.classList.add('hidden');
+            }
+
             cards.forEach((card, idx) => {
                 const price = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 3.00;
                 const flag = getFlag(card.languageCode);
                 const isChinese = card.isChinese || (card.languageCode === 'CN');
-                const actionText = isChinese ? "Check eBay Sold Listings" : "Bekijk Aanbieders op Cardmarket";
+                const marketText = isChinese ? "Check eBay Sold" : "Check Cardmarket NL";
 
                 const cardBox = document.createElement('div');
                 cardBox.className = "glass-panel rounded-3xl p-5 sm:p-6 space-y-4 border border-night-border/80 shadow-2xl";
@@ -523,7 +545,7 @@
                         </div>
 
                         <div class="text-right shrink-0">
-                            <span class="text-[10px] text-night-slate uppercase font-extrabold tracking-wider block">NL Richtprijs</span>
+                            <span class="text-[10px] text-night-slate uppercase font-extrabold tracking-wider block">Vraagprijs / NL</span>
                             <button type="button" onclick="openPriceModal(${idx})" class="group flex items-center gap-1.5 bg-night-deep hover:bg-night-surface border border-night-border/80 px-3.5 py-1.5 rounded-2xl transition cursor-pointer shadow-inner">
                                 <span id="price-tag-${idx}" class="text-xl font-black text-brimi-gold font-mono">€ ${price.toFixed(2)}</span>
                                 <i class="fa-solid fa-pen text-[10px] text-night-slate group-hover:text-white transition"></i>
@@ -541,15 +563,15 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <a href="${card.directCardmarketUrl}" target="_blank" rel="noopener noreferrer" 
-                           class="bg-white hover:bg-slate-100 text-night-base font-black py-3 px-4 rounded-2xl transition flex items-center justify-center gap-2 text-xs shadow-lg">
-                            <span>${actionText}</span>
+                           class="bg-night-deep hover:bg-night-surface text-slate-200 border border-night-border font-bold py-3 px-4 rounded-2xl transition flex items-center justify-center gap-2 text-xs shadow">
+                            <span>${marketText}</span>
                             <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                         </a>
 
                         <button type="button" onclick="shareCardToWhatsApp(${idx})" 
                                 class="bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 px-4 rounded-2xl transition flex items-center justify-center gap-2 text-xs shadow-lg cursor-pointer">
                             <i class="fa-brands fa-whatsapp text-sm"></i>
-                            <span>Deel in WhatsApp Groep</span>
+                            <span>Bied Aan in WhatsApp Groep</span>
                         </button>
                     </div>
                 `;
@@ -561,7 +583,7 @@
         window.openPriceModal = function(idx) {
             editingIndex = idx;
             const card = lastScannedCards[idx];
-            priceModalCardName.textContent = `Wat is de prijs voor ${card.cardName}?`;
+            priceModalCardName.textContent = `Wat is jouw vraagprijs voor ${card.cardName}?`;
             customPriceInput.value = (card.estimatedPriceEUR || 3.00).toFixed(2);
             priceModal.classList.remove('hidden');
             customPriceInput.focus();
@@ -580,6 +602,7 @@
             }
         });
 
+        // HIER WORDT HET COMMUNITY AANBOD BERICHT GEGENEREERD (1 KAART - EXACT VOLGENS JOUW TEMPLATE)
         window.shareCardToWhatsApp = function(idx) {
             const c = lastScannedCards[idx];
             if (!c) return;
@@ -587,20 +610,55 @@
             triggerHaptic();
             const flag = getFlag(c.languageCode);
             const price = (typeof c.estimatedPriceEUR === 'number' ? c.estimatedPriceEUR : 3.00).toFixed(2);
+            
+            // Reeks-/kaartnummer netjes samenvoegen
+            const numPart = [c.setCode, c.cardNumber ? (c.setTotal ? `${c.cardNumber}/${c.setTotal}` : c.cardNumber) : ''].filter(Boolean).join(' ');
+            const cardIdentifier = numPart ? `${c.cardName} (${numPart})` : c.cardName;
 
-            let text = `🔥 *NIEUWE PULL VIA BRIMI!* 🔥\n\n`;
-            text += `🃏 *${c.cardName}*\n`;
-            text += `📍 *Set:* ${c.setCode || ''} ${c.cardNumber || ''}${c.setTotal ? '/' + c.setTotal : ''} (${c.setName || 'Reeks'})\n`;
-            text += `🌐 *Taal:* ${flag} ${c.language || 'Engels'}\n`;
-            text += `✨ *Staat:* ${c.condition || 'Near Mint'}\n`;
-            text += `💶 *NL Waarde:* € ${price}\n`;
+            let text = `Hey community! 👋\n\n`;
+            text += `Hierbij bied ik mijn kaart aan:\n\n`;
+            text += `🃏 ${cardIdentifier}\n`;
+            text += `📍 Serie: ${c.setName || 'Pokémon'}\n`;
+            text += `🌐 Taal: ${flag} ${c.language || 'Engels'}\n`;
+            text += `✨ Conditie: ${c.condition || 'Near Mint (NM)'}\n`;
+            text += `💶 Prijs: € ${price}\n`;
             if (c.directCardmarketUrl) {
-                text += `🔗 *Link:* ${c.directCardmarketUrl}\n`;
+                text += `🔗 Cardmarket link: ${c.directCardmarketUrl}\n`;
             }
-            text += `\n_Gescand met Cardmarket Precision Scanner powered by BRIMI ⚡️_`;
+            text += `\nStuur gerust een berichtje bij interesse! 🤝`;
 
             window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
         };
+
+        // HIER WORDT HET COMMUNITY AANBOD BERICHT GEGENEREERD (MEERDERE KAARTEN)
+        btnShareAll.addEventListener('click', () => {
+            if (!lastScannedCards || lastScannedCards.length === 0) return;
+            triggerHaptic();
+
+            let text = `Hey community! 👋\n\n`;
+            text += `Hierbij bied ik de volgende kaarten aan:\n\n`;
+
+            lastScannedCards.forEach((c, index) => {
+                const flag = getFlag(c.languageCode);
+                const price = (typeof c.estimatedPriceEUR === 'number' ? c.estimatedPriceEUR : 3.00).toFixed(2);
+                const numPart = [c.setCode, c.cardNumber ? (c.setTotal ? `${c.cardNumber}/${c.setTotal}` : c.cardNumber) : ''].filter(Boolean).join(' ');
+                const cardIdentifier = numPart ? `${c.cardName} (${numPart})` : c.cardName;
+
+                text += `${index + 1}️⃣ ${cardIdentifier}\n`;
+                text += `   📍 Serie: ${c.setName || 'Pokémon'}\n`;
+                text += `   🌐 Taal: ${flag} ${c.language || 'Engels'}\n`;
+                text += `   ✨ Conditie: ${c.condition || 'Near Mint (NM)'}\n`;
+                text += `   💶 Prijs: € ${price}\n`;
+                if (c.directCardmarketUrl) {
+                    text += `   🔗 Cardmarket link: ${c.directCardmarketUrl}\n`;
+                }
+                text += `\n`;
+            });
+
+            text += `Stuur gerust een berichtje bij interesse! 🤝`;
+
+            window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+        });
 
         btnReset.addEventListener('click', resetScanner);
 
@@ -610,6 +668,7 @@
             dropContent.classList.remove('hidden');
             previewWrapper.classList.add('hidden');
             laserBeam.classList.remove('hidden');
+            btnShareAll.classList.add('hidden');
             imageDisplay.src = '';
             fileInput.value = '';
             lastScannedCards = [];
