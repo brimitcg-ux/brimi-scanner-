@@ -52,7 +52,7 @@
             <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs shadow-inner">
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span class="font-bold text-white flex items-center gap-1.5 text-[11px] sm:text-xs">
-                    <span>🇳🇱</span> Live NL Verkopers
+                    <span>🇳🇱</span> Live NL Verkopers Filter
                 </span>
             </div>
         </div>
@@ -63,13 +63,13 @@
         <div class="text-center max-w-2xl mx-auto space-y-3">
             <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-950/70 border border-sky-800/60 text-xs font-semibold text-sky-300">
                 <i class="fa-solid fa-bolt text-sky-400"></i>
-                <span>Nooit meer handmatig typen of zoeken op Cardmarket</span>
+                <span>Directe Cardmarket marktkoppeling</span>
             </div>
             <h1 class="text-2xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
                 Upload een foto. Zie direct wat je kaarten waard zijn.
             </h1>
             <p class="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg mx-auto">
-                Herken automatisch Europese én Aziatische Pokémon kaarten en bekijk direct actuele marktprijzen.
+                Bekijk realtime markttrends en open met één klik het actuele Nederlandse Near Mint aanbod op Cardmarket.
             </p>
         </div>
 
@@ -139,7 +139,7 @@
 
                 <div class="flex items-center gap-4">
                     <div class="text-right">
-                        <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Totale Waarde</span>
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Totale NL Waarde</span>
                         <span class="text-2xl sm:text-3xl font-black text-amber-300 font-mono" id="total-val-display">€ 0.00</span>
                     </div>
                     <button type="button" id="btn-reset" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-700 transition flex items-center gap-2 shadow active:scale-95 cursor-pointer">
@@ -293,7 +293,7 @@
 
             try {
                 setTimeout(() => setScanStep(2, "Kaarten identificeren...", "AI herkent taal, nummers en series...", 70), 1000);
-                setTimeout(() => setScanStep(3, "Cardmarket API koppelen...", "Officiële data ophalen via TCGdex...", 90), 2000);
+                setTimeout(() => setScanStep(3, "Cardmarket data ophalen...", "Officiële prijzen koppelen via TCGdex...", 90), 2000);
 
                 const response = await fetch(`${BACKEND_API_BASE_URL}/api/scan`, {
                     method: 'POST',
@@ -323,7 +323,7 @@
 
             } catch (err) {
                 console.error("Scan error:", err);
-                showNotification("Scan Probleem", err.message || "Er ging iets mis bij het scannen. Probeer over enkele seconden opnieuw.");
+                showNotification("Scan Probleem", err.message || "Er ging iets mis bij het scannen. Probeer het opnieuw.");
                 resetScanner();
             } finally {
                 laserEffect.classList.add('hidden');
@@ -349,15 +349,16 @@
             cardsContainer.innerHTML = '';
 
             cards.forEach((card) => {
-                const price = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 2.50;
-                const trend = typeof card.priceTrendEUR === 'number' ? card.priceTrendEUR : (price * 0.95);
-                const avg30 = typeof card.avg30DaysEUR === 'number' ? card.avg30DaysEUR : (price * 1.05);
-                totalValue += price;
+                const nlPrice = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 2.50;
+                const euFrom = typeof card.europeFromEUR === 'number' ? card.europeFromEUR : (nlPrice * 0.85);
+                const trend = typeof card.priceTrendEUR === 'number' ? card.priceTrendEUR : nlPrice;
+                const avg30 = typeof card.avg30DaysEUR === 'number' ? card.avg30DaysEUR : (nlPrice * 1.05);
+                
+                totalValue += nlPrice;
 
                 const flag = getLanguageFlag(card.languageCode);
                 const isChinese = (card.languageCode === 'CN' || (card.language || '').toLowerCase().includes('chinees'));
-                const actionButtonText = isChinese ? "Bekijk Recent Verkocht op eBay" : "Bekijk Nederlandse verkopers op Cardmarket";
-                const actionButtonIcon = isChinese ? "fa-arrow-up-right-from-square" : "fa-arrow-up-right-from-square";
+                const actionButtonText = isChinese ? "Bekijk Recent Verkocht op eBay" : "Bekijk Actuele NL Verkopers (Cardmarket)";
 
                 const cardItem = document.createElement('div');
                 cardItem.className = "card-glow rounded-2xl p-5 sm:p-6 transition-all duration-300 flex flex-col justify-between space-y-4 shadow-xl relative overflow-hidden";
@@ -382,19 +383,19 @@
                                 <p class="text-xs text-slate-400">${card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
                             </div>
                             <div class="text-right shrink-0">
-                                <span class="text-[10px] text-slate-400 block uppercase font-bold">${isChinese ? 'Marktwaarde' : 'NL Vanaf'}</span>
-                                <span class="text-2xl font-black text-amber-300 font-mono">€ ${price.toFixed(2)}</span>
+                                <span class="text-[10px] text-slate-400 block uppercase font-bold">${isChinese ? 'Marktwaarde' : 'NL Richtprijs (NM)'}</span>
+                                <span class="text-2xl font-black text-amber-300 font-mono">€ ${nlPrice.toFixed(2)}</span>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-3 gap-2 text-center">
                             <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                                <span class="text-[10px] font-bold text-slate-400 block uppercase">${isChinese ? 'Bodem' : 'Laagste NL'}</span>
-                                <span class="text-sm font-extrabold text-emerald-400 font-mono">€ ${price.toFixed(2)}</span>
+                                <span class="text-[10px] font-bold text-slate-400 block uppercase">Europa Vanaf</span>
+                                <span class="text-sm font-extrabold text-slate-300 font-mono">€ ${euFrom.toFixed(2)}</span>
                             </div>
                             <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
                                 <span class="text-[10px] font-bold text-slate-400 block uppercase">Markttrend</span>
-                                <span class="text-sm font-extrabold text-slate-200 font-mono">€ ${trend.toFixed(2)}</span>
+                                <span class="text-sm font-extrabold text-emerald-400 font-mono">€ ${trend.toFixed(2)}</span>
                             </div>
                             <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
                                 <span class="text-[10px] font-bold text-slate-400 block uppercase">30d Gem.</span>
@@ -419,7 +420,7 @@
                         <a href="${card.directCardmarketUrl}" target="_blank" rel="noopener noreferrer" 
                            class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-lg text-xs sm:text-sm">
                             <span>${actionButtonText}</span>
-                            <i class="fa-solid ${actionButtonIcon} text-xs"></i>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                         </a>
                     </div>
                 `;
