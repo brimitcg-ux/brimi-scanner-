@@ -14,13 +14,6 @@ extend: {
 fontFamily: {
 sans: ['"Plus Jakarta Sans"', 'sans-serif'],
 mono: ['"JetBrains Mono"', 'monospace']
-},
-colors: {
-brimiNavy: '#041633',
-brimiCard: '#0d1829',
-brimiBorder: 'rgba(148, 163, 184, 0.18)',
-brandBlue: '#2563eb',
-brandAccent: '#38bdf8'
 }
 }
 }
@@ -38,35 +31,31 @@ backdrop-filter: blur(16px);
 border: 1px solid rgba(148, 163, 184, 0.14);
 box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
-.card-glow:hover {
-border-color: rgba(56, 189, 248, 0.35);
-box-shadow: 0 14px 40px -10px rgba(37, 99, 235, 0.2);
-}
 .drag-active {
 border-color: #38bdf8 !important;
 background-color: rgba(37, 99, 235, 0.12) !important;
 transform: scale(1.01);
 }
-@keyframes subtle-shimmer {
-0% { transform: translateY(-100%); }
-100% { transform: translateY(100%); }
+@keyframes scan-laser {
+0% { top: 0%; opacity: 0.8; }
+50% { top: 98%; opacity: 1; }
+100% { top: 0%; opacity: 0.8; }
 }
-.shimmer-line {
+.laser-bar {
 position: absolute;
-top: 0;
 left: 0;
 right: 0;
-height: 2px;
+height: 3px;
 background: linear-gradient(90deg, transparent, #38bdf8, #818cf8, transparent);
-animation: subtle-shimmer 2.4s ease-in-out infinite alternate;
+box-shadow: 0 0 15px #38bdf8;
+animation: scan-laser 2.2s ease-in-out infinite;
 }
 </style>
 </head>
 <body class="font-sans antialiased flex flex-col justify-between selection:bg-sky-500 selection:text-white">
-<!-- Header -->
+<!-- Header: Strak, professioneel en publieksvriendelijk -->
 <header class="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md sticky top-0 z-40">
 <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
-<!-- Brand -->
 <div class="flex flex-col">
 <span class="text-base sm:text-lg font-black tracking-tight text-white uppercase flex items-center gap-2">
 Cardmarket Scanner
@@ -75,35 +64,16 @@ Cardmarket Scanner
 powered by <span class="text-sky-400 font-bold tracking-wider">BRIMI</span>
 </span>
 </div>
-<!-- Sleutel & NL Markt Badge -->
-<div class="flex items-center gap-2">
-<button type="button" id="api-key-btn" title="AI Sleutel Instellen" class="px-3 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-sky-300 flex items-center gap-1.5 transition active:scale-95 cursor-pointer z-50">
-<i class="fa-solid fa-key text-amber-400"></i>
-<span id="api-key-status" class="hidden sm:inline">AI Sleutel</span>
-</button>
-<div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs shadow-inner">
+<!-- Echte consumentenbadge -->
+<div class="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs shadow-inner">
 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-<span class="font-bold text-white flex items-center gap-1">
-<span>🇳🇱</span> Nederlandse verkopers
+<span class="font-bold text-white flex items-center gap-1.5">
+<span>🇳🇱</span> Live NL Verkopers
 </span>
-</div>
 </div>
 </div>
 </header>
 <main class="max-w-5xl mx-auto w-full px-4 py-6 sm:py-10 flex-grow flex flex-col gap-6">
-<!-- Banner indien sleutel ontbreekt -->
-<div id="missing-key-banner" class="hidden max-w-2xl mx-auto w-full p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-3 shadow-lg">
-<div class="flex items-center gap-3">
-<i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg shrink-0"></i>
-<div>
-<strong class="block text-white font-bold">Google AI Sleutel ontbreekt</strong>
-<span class="text-slate-300">Stel je gratis API-sleutel in zodat de camera de kaarten kan herkennen.</span>
-</div>
-</div>
-<button type="button" id="banner-key-btn" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold px-3 py-1.5 rounded-lg shrink-0 active:scale-95 transition">
-Instellen
-</button>
-</div>
 <!-- Introductie -->
 <div class="text-center max-w-2xl mx-auto space-y-3">
 <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-950/70 border border-sky-800/60 text-xs font-semibold text-sky-300">
@@ -173,27 +143,26 @@ Selecteer foto
 <!-- Preview container tijdens upload -->
 <div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[380px] bg-black/60 flex items-center justify-center border border-slate-800">
 <img id="image-display" src="" alt="Geüploade kaart" class="max-h-[360px] w-auto object-contain rounded-xl">
-<div id="laser-effect" class="hidden shimmer-line"></div>
+<div id="laser-effect" class="hidden laser-bar"></div>
 </div>
 </div>
 </section>
-<!-- Status & Voortgang -->
+<!-- Status & Voortgangsbalk -->
 <section id="scanning-state" class="hidden w-full max-w-xl mx-auto card-glow rounded-2xl p-6 border border-sky-500/30 text-center space-y-4 shadow-2xl">
 <div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 text-lg mx-auto flex items-center justify-center">
 <i class="fa-solid fa-spinner fa-spin"></i>
 </div>
 <div class="space-y-1">
 <h3 id="status-title" class="text-base font-bold text-white">Kaart analyseren...</h3>
-<p id="status-subtitle" class="text-xs text-slate-400">We bekijken elke kaart op de foto...</p>
+<p id="status-subtitle" class="text-xs text-slate-400">Het AI-brein bekijkt alle kaarten op de foto...</p>
 </div>
-<div class="grid grid-cols-4 gap-2 text-[11px] font-medium text-slate-500 pt-1">
-<div id="step-1" class="p-2 rounded-lg bg-slate-900 border border-slate-800">1. Kaarten</div>
-<div id="step-2" class="p-2 rounded-lg bg-slate-900 border border-slate-800">2. Nummers</div>
-<div id="step-3" class="p-2 rounded-lg bg-slate-900 border border-slate-800">3. Conditie</div>
-<div id="step-4" class="p-2 rounded-lg bg-slate-900 border border-slate-800">4. Cardmarket</div>
+<div class="grid grid-cols-3 gap-2 text-[11px] font-medium text-slate-500 pt-1">
+<div id="step-1" class="p-2 rounded-lg bg-slate-900 border border-slate-800">1. Foto scannen</div>
+<div id="step-2" class="p-2 rounded-lg bg-slate-900 border border-slate-800">2. Kaarten herkennen</div>
+<div id="step-3" class="p-2 rounded-lg bg-slate-900 border border-slate-800">3. Cardmarket NL</div>
 </div>
 <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
-<div id="progress-indicator" class="h-full bg-sky-400 transition-all duration-300 rounded-full" style="width: 25%"></div>
+<div id="progress-indicator" class="h-full bg-sky-400 transition-all duration-300 rounded-full" style="width: 20%"></div>
 </div>
 </section>
 <!-- Resultaten Overzicht -->
@@ -218,52 +187,15 @@ Selecteer foto
 </div>
 <!-- Kaarten Grid -->
 <div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-5">
-<!-- Dynamisch gevuld -->
+<!-- Wordt dynamisch gevuld -->
 </div>
 </section>
 </main>
-<!-- Modale Pop-up voor API Sleutel Invoer (iPhone Vriendelijk) -->
-<div id="api-key-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-<div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
-<div class="flex items-center justify-between">
-<div class="flex items-center gap-2.5">
-<div class="w-8 h-8 rounded-lg bg-amber-400/10 text-amber-400 flex items-center justify-center">
-<i class="fa-solid fa-key"></i>
-</div>
-<h3 class="text-lg font-bold text-white">Google AI Sleutel</h3>
-</div>
-<button type="button" id="modal-close-btn" class="text-slate-400 hover:text-white p-1 text-lg">
-<i class="fa-solid fa-xmark"></i>
-</button>
-</div>
-<p class="text-xs text-slate-300 leading-relaxed">
-Plak hieronder je gratis Gemini API-sleutel. Deze wordt veilig opgeslagen in de browser van je iPhone en zorgt ervoor dat alle kaarten direct worden herkend.
-</p>
-<div class="space-y-2">
-<label for="api-key-input" class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Jouw API Sleutel</label>
-<input type="text" id="api-key-input" placeholder="AIzaSy..." 
-class="w-full bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 outline-none font-mono transition">
-</div>
-<div class="flex flex-col gap-2.5 pt-2">
-<button type="button" id="modal-save-btn" class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition shadow-lg active:scale-95">
-Sleutel Opslaan
-</button>
-<div class="flex items-center justify-between text-[11px] text-slate-400 px-1 pt-1">
-<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline flex items-center gap-1 font-semibold">
-<span>Gratis sleutel aanmaken</span>
-<i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
-</a>
-<button type="button" id="modal-clear-btn" class="text-rose-400 hover:underline">Sleutel wissen</button>
-</div>
-</div>
-</div>
-</div>
 <footer class="border-t border-slate-900 py-4 text-center text-xs text-slate-500">
 <p class="font-medium">Cardmarket Scanner • powered by <strong class="text-slate-300">BRIMI</strong></p>
 </footer>
 <script>
 const BACKEND_API_BASE_URL = "https://brimi-scanner-.onrender.com";
-// Elementen
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const dropContent = document.getElementById('drop-content');
@@ -278,80 +210,16 @@ const statusSubtitle = document.getElementById('status-subtitle');
 const progressIndicator = document.getElementById('progress-indicator');
 const resultsCount = document.getElementById('results-count');
 const totalValDisplay = document.getElementById('total-val-display');
-const missingKeyBanner = document.getElementById('missing-key-banner');
-const apiKeyStatus = document.getElementById('api-key-status');
-const apiKeyBtn = document.getElementById('api-key-btn');
-const bannerKeyBtn = document.getElementById('banner-key-btn');
-// Modal Elementen
-const apiKeyModal = document.getElementById('api-key-modal');
-const apiKeyInput = document.getElementById('api-key-input');
-const modalCloseBtn = document.getElementById('modal-close-btn');
-const modalSaveBtn = document.getElementById('modal-save-btn');
-const modalClearBtn = document.getElementById('modal-clear-btn');
 let currentCardsData = [];
-let currentImageBase64 = null;
-let currentMimeType = "image/jpeg";
-function getStoredApiKey() {
-return localStorage.getItem('brimi_gemini_api_key') || "";
-}
-function checkApiKeyStatus() {
-const key = getStoredApiKey();
-if (!key) {
-missingKeyBanner.classList.remove('hidden');
-apiKeyStatus.innerText = "Sleutel";
-} else {
-missingKeyBanner.classList.add('hidden');
-apiKeyStatus.innerText = "Actief";
-}
-}
-checkApiKeyStatus();
-function openApiKeyModal() {
-apiKeyInput.value = getStoredApiKey();
-apiKeyModal.classList.remove('hidden');
-}
-function closeApiKeyModal() {
-apiKeyModal.classList.add('hidden');
-}
-apiKeyBtn.addEventListener('click', (e) => {
-e.stopPropagation();
-openApiKeyModal();
-});
-bannerKeyBtn.addEventListener('click', (e) => {
-e.stopPropagation();
-openApiKeyModal();
-});
-modalCloseBtn.addEventListener('click', closeApiKeyModal);
-apiKeyModal.addEventListener('click', (e) => {
-if (e.target === apiKeyModal) closeApiKeyModal();
-});
-modalSaveBtn.addEventListener('click', () => {
-const val = apiKeyInput.value.trim();
-if (val.length > 5) {
-localStorage.setItem('brimi_gemini_api_key', val);
-checkApiKeyStatus();
-closeApiKeyModal();
-alert("API-sleutel succesvol bewaard!");
-} else {
-alert("Voer een geldige sleutel in.");
-}
-});
-modalClearBtn.addEventListener('click', () => {
-localStorage.removeItem('brimi_gemini_api_key');
-apiKeyInput.value = '';
-checkApiKeyStatus();
-closeApiKeyModal();
-alert("API-sleutel gewist.");
-});
-// Dropzone & File Upload events
 dropZone.addEventListener('click', () => fileInput.click());
-['dragenter', 'dragover'].forEach(eventName => {
-dropZone.addEventListener(eventName, (e) => {
+['dragenter', 'dragover'].forEach(name => {
+dropZone.addEventListener(name, (e) => {
 e.preventDefault();
 dropZone.classList.add('drag-active');
 });
 });
-['dragleave', 'drop'].forEach(eventName => {
-dropZone.addEventListener(eventName, (e) => {
+['dragleave', 'drop'].forEach(name => {
+dropZone.addEventListener(name, (e) => {
 e.preventDefault();
 dropZone.classList.remove('drag-active');
 });
@@ -368,25 +236,18 @@ handleUploadedFile(e.target.files[0]);
 });
 function handleUploadedFile(file) {
 if (!file.type.startsWith('image/')) {
-alert('Kies een geldige foto van je Pokémon kaart(en).');
+alert('Selecteer een geldige afbeelding van je Pokémon kaart(en).');
 return;
 }
-const apiKey = getStoredApiKey();
-if (!apiKey) {
-openApiKeyModal();
-return;
-}
-currentMimeType = file.type;
 const reader = new FileReader();
 reader.onload = (event) => {
 const fullBase64 = event.target.result;
 imageDisplay.src = fullBase64;
 const base64Data = fullBase64.split(',')[1];
-currentImageBase64 = base64Data;
 dropContent.classList.add('hidden');
 previewWrapper.classList.remove('hidden');
 laserEffect.classList.remove('hidden');
-executeCardAnalysis(base64Data, currentMimeType);
+executeCardAnalysis(base64Data, file.type);
 };
 reader.readAsDataURL(file);
 }
@@ -394,7 +255,7 @@ function setScanStep(step, title, subtitle, pct) {
 statusTitle.innerText = title;
 statusSubtitle.innerText = subtitle;
 progressIndicator.style.width = pct + '%';
-for (let i = 1; i <= 4; i++) {
+for (let i = 1; i <= 3; i++) {
 const el = document.getElementById(⁠step-${i}⁠);
 if (i <= step) {
 el.classList.add('border-sky-400', 'text-sky-300', 'bg-slate-800');
@@ -405,122 +266,35 @@ el.classList.add('text-slate-500');
 }
 }
 }
-async function fetchLiveCardmarketPrices(card) {
-try {
-const cleanNum = (card.cardNumber || '').replace(/^0+/, '');
-const cleanName = (card.cardName || '').trim();
-const langCode = (card.languageCode || 'EN').toUpperCase();
-const condCode = (card.condition || 'NM').includes('Near') ? 'NM' : 'LP';
-const apiUrl = ⁠${BACKEND_API_BASE_URL}/api/price?name=${encodeURIComponent(cleanName)}&number=${encodeURIComponent(cleanNum)}&language=${langCode}&condition=${condCode}⁠;
-const backendRes = await fetch(apiUrl, { signal: AbortSignal.timeout(9000) });
-if (backendRes.ok) {
-const data = await backendRes.json();
-if (data && (data.lowest_nl_price_eur || data.price_trend_eur)) {
-return {
-estimatedPriceEUR: data.lowest_nl_price_eur,
-priceTrendEUR: data.price_trend_eur,
-avg30DaysEUR: data.avg30_days_eur,
-directCardmarketUrl: data.product_url,
-matchedViaApi: true
-};
-}
-}
-} catch (e) {
-console.warn("Render backend niet bereikbaar of reageert traag:", e);
-}
-return null;
-}
 async function executeCardAnalysis(base64Data, mimeType) {
 scanningState.classList.remove('hidden');
 resultsPanel.classList.add('hidden');
 cardsContainer.innerHTML = '';
-setScanStep(1, "Foto inspecteren...", "We zoeken alle kaarten op de afbeelding...", 25);
-const promptText = `
-Je bent een Pokémon TCG expert en taxateur. Bekijk de afbeelding zeer nauwkeurig.
-Er kunnen 1, 2 of meer kaarten op de foto liggen (los, in sleeves of toploaders).
-Identificeer voor IEDERE afzonderlijke Pokémon kaart op de foto:
-1. "cardName": Exacte officiële kaartnaam (bijv. "Pikachu & Zekrom GX", "Palkia LV.X").
-2. "setCode": Setcode linksonder of rechtsonder (bijv. "CEL", "SM", "SVP", "SWSH").
-3. "cardNumber": Het exacte kaartnummer (bijv. "106", "SM248", "162").
-4. "setTotal": Het totaalaantal van de reeks indien zichtbaar (bijv. "106").
-5. "setName": De volledige serienaam (bijv. "Celebrations: Classic Collection").
-6. "language": De taal ("Engels", "Japans", etc.).
-7. "languageCode": "EN" of "JP".
-8. "rarity": Zeldzaamheid ("Classic Collection", "Promo", "Ultra Rare", etc.).
-9. "condition": "Near Mint (NM)", "Lightly Played (LP)" of "Played (PL)".
-10. "conditionReason": Korte beschrijving van de visuele staat op de foto.
-11. "estimatedPriceEUR": Realistische Cardmarket bodemprijs in euro's als getal.
-12. "priceTrendEUR": Realistische markttrend in euro's als getal.
-13. "avg30DaysEUR": 30-dagen gemiddelde in euro's als getal.
-Antwoord UITSLUITEND met een JSON ARRAY met een object per gedetecteerde kaart. Geen markdown quotes, direct geldige JSON array.
-`;
+setScanStep(1, "Foto inspecteren...", "Afbeelding naar het BRIMI brein verzenden...", 30);
 try {
-setTimeout(() => setScanStep(2, "Kaartnummers & sets aflezen...", "Nummers linksonder en rechtsonder controleren...", 50), 700);
-setTimeout(() => setScanStep(3, "Conditie & zeldzaamheid bepalen...", "Randen en kwaliteit beoordelen...", 1400), 1400);
-const apiKey = getStoredApiKey();
-const apiUrl = ⁠https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}⁠;
-const payload = {
-contents: [
-{
-role: "user",
-parts: [
-{ text: promptText },
-{
-inlineData: {
-mimeType: mimeType || "image/jpeg",
-data: base64Data
-}
-}
-]
-}
-],
-generationConfig: {
-responseMimeType: "application/json"
-}
-};
-const response = await fetch(apiUrl, {
+setTimeout(() => setScanStep(2, "Kaarten identificeren...", "AI herkent namen, nummers en series...", 65), 1200);
+setTimeout(() => setScanStep(3, "Cardmarket NL data koppelen...", "Live Nederlandse prijzen opzoeken...", 90), 2400);
+const response = await fetch(⁠${BACKEND_API_BASE_URL}/api/scan⁠, {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify(payload)
+body: JSON.stringify({
+image_base64: base64Data,
+mime_type: mimeType || "image/jpeg"
+})
 });
 if (!response.ok) {
-const errBody = await response.json();
-throw new Error(errBody?.error?.message || "Google AI Vision weigerde het verzoek.");
+const errData = await response.json().catch(() => ({}));
+throw new Error(errData.detail || "De server reageerde niet correct.");
 }
-setScanStep(4, "Cardmarket NL data koppelen...", "Prijzen ophalen via Render backend...", 90);
-const result = await response.json();
-const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-let detectedCards = [];
-if (rawText) {
-detectedCards = JSON.parse(rawText);
-if (!Array.isArray(detectedCards)) {
-detectedCards = [detectedCards];
+const cards = await response.json();
+if (!cards || cards.length === 0) {
+throw new Error("Geen Pokémon kaarten herkend op deze foto. Zorg voor voldoende licht.");
 }
-}
-if (detectedCards.length === 0) {
-throw new Error("Geen Pokémon kaarten herkend op deze foto. Zorg voor goed licht.");
-}
-// Koppel elke herkende kaart aan de live Render backend
-const finalizedCards = [];
-for (const card of detectedCards) {
-const liveData = await fetchLiveCardmarketPrices(card);
-if (liveData) {
-finalizedCards.push({
-...card,
-estimatedPriceEUR: liveData.estimatedPriceEUR,
-priceTrendEUR: liveData.priceTrendEUR,
-avg30DaysEUR: liveData.avg30DaysEUR,
-directCardmarketUrl: liveData.directCardmarketUrl
-});
-} else {
-finalizedCards.push(card);
-}
-}
-currentCardsData = finalizedCards;
+currentCardsData = cards;
 renderResults(currentCardsData);
 } catch (err) {
 console.error(err);
-alert("Fout bij analyseren:\n" + err.message + "\n\nControleer je API-sleutel via de knop bovenaan.");
+alert("Er ging iets mis bij het scannen:\n" + err.message);
 resetScanner();
 } finally {
 laserEffect.classList.add('hidden');
@@ -635,7 +409,6 @@ previewWrapper.classList.add('hidden');
 laserEffect.classList.add('hidden');
 imageDisplay.src = '';
 fileInput.value = '';
-currentImageBase64 = null;
 currentCardsData = [];
 }
 </script>
