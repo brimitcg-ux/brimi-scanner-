@@ -13,8 +13,8 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="BRIMI Turbo Scanner Engine",
-    description="Supersnelle Pokémon kaartdetectie met directe Cardmarket NL koppeling.",
-    version="6.5.0"
+    description="Supersnelle Pokémon kaartdetectie met directe Cardmarket NL koppeling en slab-herkenning.",
+    version="6.6.0"
 )
 
 # Open CORS voor iPhone Safari en PWA
@@ -29,7 +29,6 @@ app.add_middleware(
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL = timedelta(hours=4)
 
-# Cache voor beschikbare Google AI modellen (1 uur geldig)
 MODELS_CACHE: List[str] = []
 MODELS_CACHE_TIME: Optional[datetime] = None
 
@@ -64,7 +63,7 @@ async def get_working_gemini_models(api_key: str) -> List[str]:
 
     discovered: List[str] = []
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=3.5) as client:
             res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}")
             if res.status_code == 200:
                 data = res.json()
@@ -76,16 +75,13 @@ async def get_working_gemini_models(api_key: str) -> List[str]:
     except Exception:
         pass
 
-    # Betrouwbare fallback-lijst met actuele modelnamen
     fallback_priority = [
         "models/gemini-2.0-flash",
         "models/gemini-2.0-flash-lite",
         "models/gemini-1.5-flash-latest",
-        "models/gemini-1.5-flash",
-        "models/gemini-1.5-flash-8b"
+        "models/gemini-1.5-flash"
     ]
     
-    # Voeg ontdekte modellen vooraan toe en vul aan met fallbacks
     combined = []
     for m in discovered + fallback_priority:
         if m not in combined:
@@ -120,7 +116,6 @@ async def resolve_cardmarket_price(card_name: str, card_number: str, language_co
     resolved_price = round(max(ai_estimate, 1.50), 2)
     source = "Cardmarket NL Richtprijs"
 
-    # Razendsnelle check (max 1.5s) op TCGdex
     try:
         async with httpx.AsyncClient(timeout=1.5) as client:
             search_url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(card_name)}"
@@ -154,7 +149,8 @@ async def resolve_cardmarket_price(card_name: str, card_number: str, language_co
 
 @app.get("/")
 def ping():
-    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.5.0"}
+    """Lichtgewicht ping-endpoint voor pre-warming en keep-alive pings."""
+    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.6.0"}
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
@@ -164,14 +160,18 @@ async def scan_cards(payload: ScanRequest):
 
     prompt = """
 Analyseer deze Pokémon kaartfoto direct:
-1. Naam: officiële Engelse Pokémon naam (bijv. Dewgong, Misty's Vitality, Leafeon ex, Alolan Exeggutor).
+1. Naam: officiële Pokémon naam (bijv. Dewgong, Misty's Vitality, Leafeon ex, Alolan Exeggutor).
 2. Nummer: cijfers vóór de streep (bijv. '097' uit '097/094').
 3. Totaal: cijfers na de streep (bijv. '094').
 4. Setcode: letters linksonder (bijv. PBL, PFL, ME05, SVE).
 5. Setnaam: herken de reeks (bijv. Pitch Black, Phantasmal Flames, Surging Sparks).
 6. Taal: Chinees indien vereenvoudigde karakters (taalCode: 'CN'), Japans ('JP') of Engels ('EN').
-7. Conditie: Near Mint (NM), Light Play (LP), etc.
-8. Reële marktprijs in euro (realistische Nederlandse beurswaarde).
+7. Graded Slab: Check of de kaart in een graded slab zit (bijv. PSA, Beckett/BGS, CGC, PCA, AP Grading).
+   - isGraded: true/false
+   - gradingCompany: "PSA", "BGS", "CGC" of null
+   - grade: bijv. "10", "9.5", "9" of null
+8. Conditie: Indien graded geef de grade weer (bijv. "PSA 10 Gem Mint"). Indien raw, kies uit: "Near Mint (NM)", "Light Played (LP)", "Good (GD)".
+9. Reële marktprijs in euro (realistische Nederlandse beurswaarde).
 
 JSON Formaat:
 [
@@ -184,6 +184,9 @@ JSON Formaat:
     "language": "Engels",
     "languageCode": "EN",
     "rarity": "Illustration Rare",
+    "isGraded": false,
+    "gradingCompany": null,
+    "grade": null,
     "condition": "Near Mint (NM)",
     "marketEstimateEUR": 4.20
   }
@@ -216,7 +219,6 @@ JSON Formaat:
 
     async with httpx.AsyncClient(timeout=16.0) as client:
         for model in candidate_models[:4]:
-            # Zorg dat de URL het correcte pad bevat
             model_path = model if model.startswith("models/") else f"models/{model}"
             url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:generateContent?key={key}"
             
@@ -239,10 +241,9 @@ JSON Formaat:
                 continue
 
     if not raw_text:
-        detail_msg = f"Geen respons van AI Vision. Pogingen: {', '.join(error_log[-2:])}" if error_log else "AI Vision time-out."
+        detail_msg = f"Geen respons van scanner engine. Pogingen: {', '.join(error_log[-2:])}" if error_log else "Scanner time-out."
         raise HTTPException(status_code=502, detail=detail_msg)
 
-    # JSON opschonen
     cleaned = raw_text.strip()
     if cleaned.startswith("```json"): cleaned = cleaned[7:]
     if cleaned.startswith("```"): cleaned = cleaned[3:]
@@ -254,18 +255,25 @@ JSON Formaat:
         if not isinstance(cards_data, list):
             cards_data = [cards_data]
     except Exception:
-        raise HTTPException(status_code=500, detail="Ongeldig antwoord van AI Vision.")
+        raise HTTPException(status_code=500, detail="Ongeldig antwoord van scanner engine.")
 
     async def enrich_card(c: dict):
+        base_estimate = float(c.get("marketEstimateEUR") or 2.50)
         price_info = await resolve_cardmarket_price(
             card_name=c.get("cardName", "Pokémon Kaart"),
             card_number=str(c.get("cardNumber", "")),
             language_code=c.get("languageCode", "EN"),
-            ai_estimate=float(c.get("marketEstimateEUR") or 2.50)
+            ai_estimate=base_estimate
         )
+        
+        final_price = price_info["price_eur"]
+        if c.get("isGraded") and c.get("grade") in ["10", "Gem Mint", "Pristine"]:
+            final_price = round(final_price * 2.2, 2)
+
         return {
             **c,
-            "estimatedPriceEUR": price_info["price_eur"],
+            "basePriceNM": final_price,
+            "estimatedPriceEUR": final_price,
             "directCardmarketUrl": price_info["url"],
             "priceSource": price_info["source"],
             "isChinese": price_info["is_chinese"]
