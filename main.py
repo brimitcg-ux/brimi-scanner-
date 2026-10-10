@@ -281,7 +281,7 @@ Geef geen markdown opmaak of extra tekst, alleen de JSON array.
     error_logs = []
 
     async with httpx.AsyncClient(timeout=45.0) as client:
-        # Dynamisch de actieve modellen voor deze API-sleutel ophalen
+        # Dynamisch de actieve modellen voor deze specifieke Google API-sleutel ophalen
         discovered_models = []
         try:
             list_resp = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
@@ -294,11 +294,12 @@ Geef geen markdown opmaak of extra tekst, alleen de JSON array.
         except Exception as e:
             error_logs.append(f"Model-lijst ophalen: {str(e)[:60]}")
 
-        # Prioriteer de moderne Flash modellen die beschikbaar zijn
-        preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+        # Gebruik primair het model dat letterlijk in jouw AI Studio code snippet stond
+        preferred = ["gemini-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash"]
         models_to_try = [m for m in preferred if m in discovered_models]
         if not models_to_try:
-            models_to_try = [m for m in discovered_models if "flash" in m] or preferred
+            # Fallback op elk actief model dat content kan genereren
+            models_to_try = [m for m in discovered_models if "flash" in m] or ["gemini-flash-latest"]
 
         for model_name in models_to_try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
@@ -319,11 +320,11 @@ Geef geen markdown opmaak of extra tekst, alleen de JSON array.
                             break
                         else:
                             finish_r = candidates[0].get("finishReason", "GEEN_TEKST")
-                            error_logs.append(f"{model_name}: 200 OK maar finishReason={finish_r}")
+                            error_logs.append(f"{model_name}: finishReason={finish_r}")
                 else:
-                    error_logs.append(f"{model_name} (HTTP {res.status_code}): {res.text[:120]}")
+                    error_logs.append(f"{model_name} (HTTP {res.status_code}): {res.text[:90]}")
             except Exception as e:
-                error_logs.append(f"{model_name} uitzondering: {str(e)[:120]}")
+                error_logs.append(f"{model_name} fout: {str(e)[:90]}")
 
     if not raw_text:
         diagnose = " | ".join(error_logs[-2:]) if error_logs else "Geen actief AI-model gevonden"
