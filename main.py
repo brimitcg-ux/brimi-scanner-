@@ -65,93 +65,116 @@ def get_ebay_sold_url(card_name: str, card_number: str, slab_info: Optional[str]
 async def fetch_live_pricecharting_price(card_name: str, card_number: str, grade_str: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Haalt realtime de exacte veilingprijzen (Grade 8, Grade 9, PSA 10, etc.) van PriceCharting op."""
     clean_num = clean_card_number(card_number)
-    query = f"pokemon {card_name} {clean_num}".strip()
-    search_url = f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(query)}&type=prices"
+    # Zoek zonder overbodige woorden voor maximale trefzekerheid op PriceCharting
+    search_queries = [
+        f"{card_name} {clean_num}".strip(),
+        f"pokemon {card_name} {clean_num}".strip()
+    ]
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,nl;q=0.8"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,nl;q=0.8",
+        "Cache-Control": "no-cache"
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=4.5, follow_redirects=True, headers=headers) as client:
-            resp = await client.get(search_url)
-            if resp.status_code != 200:
-                return None
+    def to_float(txt: str) -> Optional[float]:
+        if not txt: return None
+        # Negeer tekst en behoud alleen cijfers en decimalen
+        clean = re.sub(r"[^\d\.]", "", txt.replace(",", ""))
+        try:
+            val = float(clean)
+            return val if val > 0 else None
+        except Exception:
+            return None
 
-            target_html = resp.text
-            final_url = str(resp.url)
+    g_raw = (grade_str or "9").lower().replace("psa", "").replace("cgc", "").replace("bgs", "").strip()
 
-            # Indien search overview, open het eerste relevante product
-            if "search-products" in final_url:
+    # PriceCharting gebruikt video-game kolomnamen voor TCG kaarten:
+    # graded_price = Grade 9 | manual_only_price = PSA 10 | box_only_price = Grade 9.5 | new_price = Grade 8
+    target_grade = "9"
+    if "10" in g_raw: target_grade = "10"
+    elif "9.5" in g_raw: target_grade = "9.5"
+    elif "8" in g_raw: target_grade = "8"
+    elif "7" in g_raw: target_grade = "7"
+
+    grade_col_map = {
+        "10": ["manual_only_price", "manual_only", "psa10_price"],
+        "9.5": ["box_only_price", "box_only"],
+        "9": ["graded_price", "graded", "grade9_price"],
+        "8": ["new_price", "new", "grade8_price"],
+        "7": ["cib_price", "complete_price", "grade7_price"],
+        "ungraded": ["loose_price", "used_price", "ungraded_price"]
+    }
+
+    async with httpx.AsyncClient(timeout=6.5, follow_redirects=True, headers=headers) as client:
+        for q in search_queries:
+            search_url = f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(q)}&type=prices"
+            try:
+                resp = await client.get(search_url)
+                if resp.status_code != 200:
+                    continue
+
+                target_html = resp.text
+                final_url = str(resp.url)
                 soup = BeautifulSoup(target_html, "html.parser")
-                link = soup.select_one("td.title a") or soup.select_one("a[href*='/game/pokemon-']")
-                if link and link.get("href"):
-                    product_href = link["href"]
-                    final_url = urllib.parse.urljoin("https://www.pricecharting.com", product_href)
-                    p_resp = await client.get(final_url)
-                    if p_resp.status_code == 200:
-                        target_html = p_resp.text
 
-            soup = BeautifulSoup(target_html, "html.parser")
-            g_raw = (grade_str or "9").lower().replace("psa", "").replace("cgc", "").replace("bgs", "").strip()
+                # Indien we op een zoekresultaten-overzichtspagina zijn beland, navigeer naar het eerste product
+                if "search-products" in final_url:
+                    # Check eerst of de prijs al in de zoekresultatentabel staat
+                    for col_id in grade_col_map.get(target_grade, []):
+                        cell = soup.select_one(f"td.{col_id}, td#{col_id}")
+                        if cell:
+                            found = to_float(cell.get_text())
+                            if found:
+                                eur = round(found * 0.92, 2)
+                                return {
+                                    "price_eur": eur,
+                                    "price_usd": found,
+                                    "url": final_url,
+                                    "grade_label": f"Grade {target_grade}"
+                                }
 
-            def to_float(txt: str) -> Optional[float]:
-                if not txt: return None
-                nums = re.findall(r"[\d\.]+", txt.replace(",", ""))
-                return float(nums[0]) if nums else None
+                    product_link = soup.select_one("td.title a") or soup.select_one("a[href*='/game/pokemon']")
+                    if product_link and product_link.get("href"):
+                        final_url = urllib.parse.urljoin("https://www.pricecharting.com", product_link["href"])
+                        p_resp = await client.get(final_url)
+                        if p_resp.status_code == 200:
+                            target_html = p_resp.text
+                            soup = BeautifulSoup(target_html, "html.parser")
 
-            # 1. Check specifieke PriceCharting table cell IDs
-            grade_id_map = {
-                "10": ["manual_only_price", "psa10_price", "bgs10_price"],
-                "9.5": ["box_only_price", "grade95_price"],
-                "9": ["grade9_price"],
-                "8": ["grade8_price"],
-                "7": ["grade7_price", "cib_price"],
-                "ungraded": ["ungraded_price", "loose_price"]
-            }
+                # 1. Zoek op de officiële PriceCharting tabel ID's
+                for col_id in grade_col_map.get(target_grade, []):
+                    elem = soup.find(id=col_id) or soup.select_one(f".{col_id}")
+                    if elem:
+                        val = to_float(elem.get_text())
+                        if val:
+                            eur = round(val * 0.92, 2)
+                            return {
+                                "price_eur": eur,
+                                "price_usd": val,
+                                "url": final_url,
+                                "grade_label": f"Grade {target_grade}"
+                            }
 
-            key = "9"
-            if "10" in g_raw: key = "10"
-            elif "9.5" in g_raw: key = "9.5"
-            elif "8" in g_raw: key = "8"
-            elif "7" in g_raw: key = "7"
+                # 2. Zoek direct op tabelrijen waar de labeltekst (bijv. 'Grade 9' of 'PSA 10') in staat
+                for row in soup.select("table#price_data tr, tr"):
+                    row_text = row.get_text(separator=" ").strip().lower()
+                    if f"grade {target_grade}" in row_text or (target_grade == "10" and "psa 10" in row_text):
+                        price_matches = re.findall(r"\$\s*([0-9\.,]+)", row.get_text())
+                        for p_str in price_matches:
+                            val = to_float(p_str)
+                            if val:
+                                eur = round(val * 0.92, 2)
+                                return {
+                                    "price_eur": eur,
+                                    "price_usd": val,
+                                    "url": final_url,
+                                    "grade_label": f"Grade {target_grade}"
+                                }
 
-            found_usd = None
-            for cell_id in grade_id_map.get(key, []):
-                el = soup.find(id=cell_id)
-                if el:
-                    val = to_float(el.get_text())
-                    if val and val > 0:
-                        found_usd = val
-                        break
-
-            # 2. Regex fallback over tekst als cell ID afwijkt
-            if not found_usd:
-                patterns = [
-                    rf"(?:Grade\s*{re.escape(key)}|PSA\s*{re.escape(key)})\s*[:\s]*\$([0-9\.,]+)",
-                    rf"\$([0-9\.,]+)\s*(?:Grade\s*{re.escape(key)}|PSA\s*{re.escape(key)})"
-                ]
-                for p in patterns:
-                    m = re.search(p, target_html, re.I)
-                    if m:
-                        val = to_float(m.group(1))
-                        if val and val > 0:
-                            found_usd = val
-                            break
-
-            if found_usd and found_usd > 0:
-                # Koersconversie USD naar EUR (ca. 0.92)
-                eur = round(found_usd * 0.92, 2)
-                return {
-                    "price_eur": eur,
-                    "price_usd": found_usd,
-                    "url": final_url,
-                    "grade_label": f"Grade {key}"
-                }
-    except Exception:
-        pass
+            except Exception:
+                continue
 
     return None
 
@@ -218,18 +241,20 @@ async def resolve_card_price(
 
         if pc_live and pc_live.get("price_eur"):
             real_price = pc_live["price_eur"]
+            usd_val = pc_live.get('price_usd', 0.0)
             data = {
                 "price_eur": real_price,
                 "url": pc_live.get("url") or default_pc_url,
-                "source": f"PriceCharting Live (${pc_live.get('price_usd'):.2f})",
+                "source": f"PriceCharting Live (${usd_val:.2f})",
                 "is_graded": True,
                 "is_chinese": False
             }
         else:
+            # Fallback als PriceCharting tijdelijk niet bereikbaar is
             data = {
                 "price_eur": round(max(ai_estimate, 12.0), 2),
                 "url": default_pc_url,
-                "source": f"PriceCharting ({label})",
+                "source": f"Geschat ({label})",
                 "is_graded": True,
                 "is_chinese": False
             }
