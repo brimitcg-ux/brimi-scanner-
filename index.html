@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BRIMI — Cardmarket Precision Scanner</title>
+    <title>BRIMI — Nederlandse PKMN prijzen checker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -128,7 +128,6 @@
 </head>
 <body class="font-sans antialiased flex flex-col justify-between selection:bg-night-accent selection:text-white pb-10">
 
-    <!-- HEADER -->
     <header class="border-b border-night-border/40 bg-night-base/80 backdrop-blur-2xl sticky top-0 z-40">
         <div class="max-w-2xl mx-auto px-4 py-3.5 flex justify-between items-center">
             
@@ -147,23 +146,17 @@
                         <span class="brimi-dot"></span>
                     </div>
                     <span class="text-[10px] tracking-widest font-bold uppercase text-night-slate">
-                        Cardmarket & Slab Precision Scanner
+                        Nederlandse PKMN prijzen checker
                     </span>
                 </div>
             </div>
 
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-night-deep border border-night-border text-xs shadow-inner">
-                <span class="relative flex h-2 w-2">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span class="font-extrabold text-slate-200 text-[11px] tracking-wide">Filter on: Cardmarket Nederland</span>
-            </div>
+            <!-- Rechterkant clean gelaten zoals gevraagd -->
+            <div></div>
 
         </div>
     </header>
 
-    <!-- MAIN VIEWPORT -->
     <main class="max-w-2xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-6">
 
         <div class="text-center space-y-1">
@@ -175,10 +168,8 @@
             </p>
         </div>
 
-        <!-- CAMERA & UPLOAD VIEWFINDER -->
         <div class="w-full">
             <label for="file-input" id="drop-zone" class="glass-panel relative block rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 group border border-night-border/60 hover:border-night-slate/60 active:scale-[0.99] glow-accent">
-                <!-- Geen capture="environment", zodat iOS het volledige keuzemenu toont (Foto maken / Fotobibliotheek / Bestanden) -->
                 <input type="file" id="file-input" class="hidden" accept="image/*">
                 
                 <div class="vf-corner vf-tl"></div>
@@ -213,7 +204,6 @@
             </label>
         </div>
 
-        <!-- SCAN STATUS INDICATOR -->
         <div id="scanning-state" class="hidden w-full glass-panel rounded-2xl p-5 text-center space-y-3">
             <div class="flex items-center justify-center gap-3">
                 <i class="fa-solid fa-circle-notch fa-spin text-white text-sm"></i>
@@ -225,7 +215,6 @@
             </div>
         </div>
 
-        <!-- RESULTATEN PANEEL -->
         <div id="results-panel" class="hidden w-full space-y-4">
             
             <div class="flex items-center justify-between px-1 gap-2 flex-wrap">
@@ -244,12 +233,10 @@
                 </div>
             </div>
 
-            <!-- Dynamische Kaarten container -->
             <div id="cards-container" class="space-y-4"></div>
 
         </div>
 
-        <!-- 3 KRACHTIGE REDENEN -->
         <div class="pt-4 border-t border-night-border/40 space-y-3">
             <div class="text-center">
                 <h3 class="text-[11px] font-black uppercase tracking-widest text-night-slate">Waarom BRIMI Scanner?</h3>
@@ -258,11 +245,11 @@
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div class="glass-panel rounded-2xl p-4 space-y-2 border border-night-border/60">
                     <div class="w-8 h-8 rounded-xl bg-night-deep border border-night-border text-white flex items-center justify-center text-xs">
-                        <i class="fa-solid fa-flag"></i>
+                        <i class="fa-solid fa-bolt"></i>
                     </div>
-                    <h4 class="text-xs font-black text-white">Direct Nederlandse Prijzen</h4>
+                    <h4 class="text-xs font-black text-white">Geen Urenlang Speurwerk</h4>
                     <p class="text-[11px] text-slate-300 leading-relaxed">
-                        Geen buitenlandse verzendkosten. Je ziet direct wat Nederlandse aanbieders op Cardmarket vragen.
+                        Stop met eindeloos handmatig zoeken op internet. Binnen één seconde zie je direct wat de actuele Nederlandse marktwaarde is.
                     </p>
                 </div>
 
@@ -282,7 +269,7 @@
                     </div>
                     <h4 class="text-xs font-black text-white">1-Tik Community Aanbod</h4>
                     <p class="text-[11px] text-slate-300 leading-relaxed">
-                        Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief vraagprijs, conditie en link.
+                        Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief vraagprijs en conditie.
                     </p>
                 </div>
             </div>
@@ -290,7 +277,6 @@
 
     </main>
 
-    <!-- PRIJS AANPASSEN MODAL -->
     <div id="price-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
         <div class="glass-panel max-w-xs w-full rounded-2xl p-5 text-center space-y-4 shadow-2xl border border-night-border">
             <div class="space-y-1">
@@ -314,7 +300,6 @@
         </div>
     </div>
 
-    <!-- NOTIFICATIE MODAL -->
     <div id="notify-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
         <div class="glass-panel max-w-sm w-full rounded-2xl p-6 text-center space-y-4 shadow-2xl border border-night-border">
             <div class="w-10 h-10 rounded-full bg-night-deep border border-night-border text-amber-400 flex items-center justify-center mx-auto text-base">
@@ -686,18 +671,15 @@
                 conditionStr = `${c.gradingCompany || 'PSA'} ${c.grade || ''} Graded Slab`.trim();
             }
 
+            // WhatsApp bericht zonder de links naar CM of PC
             let text = `Hey community! 👋\n\n`;
             text += `Hierbij bied ik mijn kaart aan:\n\n`;
             text += `🃏 ${cardIdentifier}\n`;
             text += `📍 Serie: ${c.setName || 'Pokémon'}\n`;
             text += `🌐 Taal: ${flag} ${c.language || 'Engels'}\n`;
             text += `✨ Conditie: ${conditionStr}\n`;
-            text += `💶 Prijs: € ${price}\n`;
-            if (c.directMarketUrl) {
-                const linkLabel = c.isGraded ? "PriceCharting link" : "Cardmarket link";
-                text += `🔗 ${linkLabel}: ${c.directMarketUrl}\n`;
-            }
-            text += `\nStuur gerust een berichtje bij interesse! 🤝`;
+            text += `💶 Prijs: € ${price}\n\n`;
+            text += `Stuur gerust een berichtje bij interesse! 🤝`;
 
             window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
         };
@@ -724,12 +706,7 @@
                 text += `   📍 Serie: ${c.setName || 'Pokémon'}\n`;
                 text += `   🌐 Taal: ${flag} ${c.language || 'Engels'}\n`;
                 text += `   ✨ Conditie: ${conditionStr}\n`;
-                text += `   💶 Prijs: € ${price}\n`;
-                if (c.directMarketUrl) {
-                    const linkLabel = c.isGraded ? "PriceCharting" : "Cardmarket";
-                    text += `   🔗 ${linkLabel}: ${c.directMarketUrl}\n`;
-                }
-                text += `\n`;
+                text += `   💶 Prijs: € ${price}\n\n`;
             });
 
             text += `Stuur gerust een berichtje bij interesse! 🤝`;
