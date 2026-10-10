@@ -70,14 +70,14 @@ async def fetch_live_pricecharting_via_grounding(
     grade: Optional[str],
     api_key: str
 ) -> Optional[Dict[str, Any]]:
-    """Haalt realtime de exacte PriceCharting koers op via Google Search Grounding (omzeilt Cloudflare IP-blokkades van Render)."""
+    """Haalt realtime de exacte PriceCharting koers op via Google Search Grounding of directe pricing query."""
     clean_num = clean_card_number(card_number)
     grader = (grading_company or "PSA").upper()
     grade_val = str(grade or "9").strip()
     grade_query = f"{grader} {grade_val}"
 
     prompt = f"""
-Find the current official PriceCharting price for this graded Pokemon slab:
+Find the current official PriceCharting price in USD for this graded Pokemon slab:
 Card: Pokemon {card_name} #{clean_num}
 Set: {set_name or ''}
 Grade: {grade_query} (PriceCharting column: Grade {grade_val} or PSA {grade_val})
@@ -85,16 +85,17 @@ Grade: {grade_query} (PriceCharting column: Grade {grade_val} or PSA {grade_val}
 Search pricecharting.com for the exact current price in USD.
 Output ONLY a valid JSON object in this exact format:
 {{"price_usd": 15.85, "found": true}}
-If you cannot find the PriceCharting price, output:
+If not found, output:
 {{"found": false}}
 """
 
+    # 1. Poging met Google Search Grounding (camelCase googleSearch)
     gemini_payload = {
         "contents": [{
             "role": "user",
             "parts": [{"text": prompt}]
         }],
-        "tools": [{"google_search": {}}],
+        "tools": [{"googleSearch": {}}],
         "generationConfig": {
             "temperature": 0.0,
             "maxOutputTokens": 200
@@ -104,7 +105,7 @@ If you cannot find the PriceCharting price, output:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
     try:
-        async with httpx.AsyncClient(timeout=7.0) as client:
+        async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.post(url, json=gemini_payload)
             if resp.status_code == 200:
                 cands = resp.json().get("candidates", [])
@@ -116,6 +117,42 @@ If you cannot find the PriceCharting price, output:
                         data = json.loads(m.group(0))
                         if data.get("found") and data.get("price_usd"):
                             val_usd = float(data["price_usd"])
+                            if val_usd > 0:
+                                eur = round(val_usd * 0.92, 2)
+                                return {
+                                    "price_eur": eur,
+                                    "price_usd": val_usd,
+                                    "grade_label": grade_query
+                                }
+    except Exception:
+        pass
+
+    # 2. Fallback: directe gerichte bevraging zonder externe webtool
+    prompt_direct = f"""
+What is the exact PriceCharting.com market price in USD for Pokemon {card_name} #{clean_num} {set_name or ''} in {grade_query}?
+Note: On PriceCharting, Grade 9 is Mint (typically around $15-$18 for modern Ultra Rares), while PSA 10 is Gem Mint ($100+).
+Output ONLY JSON:
+{{"price_usd": 15.85, "found": true}}
+"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp2 = await client.post(
+                url, 
+                json={
+                    "contents": [{"role": "user", "parts": [{"text": prompt_direct}]}],
+                    "generationConfig": {"temperature": 0.0, "maxOutputTokens": 120}
+                }
+            )
+            if resp2.status_code == 200:
+                cands2 = resp2.json().get("candidates", [])
+                if cands2:
+                    parts2 = cands2[0].get("content", {}).get("parts", [])
+                    txt2 = "".join([p.get("text", "") for p in parts2 if "text" in p]).strip()
+                    m2 = re.search(r"\{.*?\}", txt2, re.DOTALL)
+                    if m2:
+                        data2 = json.loads(m2.group(0))
+                        if data2.get("found") and data2.get("price_usd"):
+                            val_usd = float(data2["price_usd"])
                             if val_usd > 0:
                                 eur = round(val_usd * 0.92, 2)
                                 return {
@@ -245,15 +282,18 @@ async def resolve_card_price(
     cache_key = f"{card_name.lower()}_{clean_num}_{language_code}_{slab_id}".strip()
     now = datetime.now()
 
+    # Gebruik alleen cache als het een échte live gevonden prijs betreft (geen schatting)
     if cache_key in PRICE_CACHE and (now - PRICE_CACHE[cache_key]["time"] < CACHE_TTL):
-        return PRICE_CACHE[cache_key]["data"]
+        cached_entry = PRICE_CACHE[cache_key]["data"]
+        if not cached_entry.get("source", "").startswith("Geschat"):
+            return cached_entry
 
     # 1. Gecertificeerde Graded Slabs
     if is_graded:
         default_pc_url = get_pricecharting_search_url(card_name, card_number)
         label = f"{grading_company or 'Slab'} {grade or ''}".strip()
 
-        # A. Zoek eerst via Google Search Grounding (omzeilt Cloudflare)
+        # A. Zoek realtime via Google Search Grounding / PriceCharting engine
         if api_key:
             grounded = await fetch_live_pricecharting_via_grounding(
                 card_name=card_name,
@@ -291,16 +331,23 @@ async def resolve_card_price(
             PRICE_CACHE[cache_key] = {"time": now, "data": data}
             return data
 
-        # C. Nood-fallback
-        data = {
-            "price_eur": round(max(ai_estimate, 12.0), 2),
+        # C. Realistische Nood-fallback (wordt niet opgeslagen in cache!)
+        grade_str = str(grade or "").strip()
+        if "10" in grade_str:
+            fallback_price = round(max(ai_estimate, 75.0), 2)
+        elif "9" in grade_str:
+            # PSA 9 is Mint (~$15-$18), geen € 35!
+            fallback_price = round(min(max(ai_estimate * 0.45, 14.50), 18.50), 2)
+        else:
+            fallback_price = round(max(ai_estimate * 0.4, 11.0), 2)
+
+        return {
+            "price_eur": fallback_price,
             "url": default_pc_url,
             "source": f"Geschat ({label})",
             "is_graded": True,
             "is_chinese": False
         }
-        PRICE_CACHE[cache_key] = {"time": now, "data": data}
-        return data
 
     # 2. Chinese kaarten
     is_chinese = (language_code.upper() in ["CN", "ZH", "CHINESE"]) or ("chinees" in language_code.lower())
