@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import asyncio
 import urllib.parse
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -13,11 +14,11 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="BRIMI Cardmarket & AI Vision Engine",
-    description="Centrale backend voor automatische kaartdetectie via AI en live Cardmarket NL prijzen.",
-    version="2.3.0"
+    description="Productie backend voor automatische Pokémon detectie en live Cardmarket NL marktprijzen.",
+    version="3.0.0"
 )
 
-# CORS geoptimaliseerd voor Safari / WebKit op iOS
+# CORS geconfigureerd voor iOS Safari en GitHub Pages
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,24 +28,15 @@ app.add_middleware(
 )
 
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL = timedelta(minutes=15)
+CACHE_TTL = timedelta(minutes=20)
 
 BROWSER_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1"
 }
 
 class OfferItem(BaseModel):
@@ -121,18 +113,18 @@ def extract_nl_seller_offers(soup: BeautifulSoup) -> List[OfferItem]:
             or "Netherlands" in row_text
         )
         seller_tag = row.find("a", href=re.compile(r"/Users/"))
-        seller_name = seller_tag.get_text(strip=True) if seller_tag else "NL Verkopers"
-        
+        seller_name = seller_tag.get_text(strip=True) if seller_tag else "NL Verkoper"
+
         condition = "NM"
         if "LP" in row_text or "Lightly Played" in row_text:
             condition = "LP"
         elif "EX" in row_text or "Excellent" in row_text:
             condition = "EX"
-            
+
         language = "EN"
         if "Japanese" in row_text or "Japans" in row_text:
             language = "JP"
-            
+
         price_elem = row.find("span", class_=re.compile(r"color-primary|font-weight-bold"))
         price_val = 0.0
         if price_elem:
@@ -165,7 +157,7 @@ async def fetch_cardmarket_data(card_name: str, card_number: str, language: str 
     if str(language).upper() == "EN":
         search_url += "&idLanguage=1"
 
-    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=12.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=7.0, follow_redirects=True) as client:
         try:
             resp = await client.get(search_url)
             resp.raise_for_status()
@@ -229,32 +221,31 @@ async def get_price(name: str, number: str, language: str = "EN", condition: str
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
-    """Ontvangt de foto, herkent via actieve Google Gemini AI alle kaarten en zoekt direct de Cardmarket NL prijzen."""
+    """Ontvangt een foto, herkent via Google Gemini alle kaarten en haalt Cardmarket NL data op."""
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
         raise HTTPException(
-            status_code=500, 
-            detail="GEMINI_API_KEY is niet ingesteld in Render Environment Variables."
+            status_code=500,
+            detail="GEMINI_API_KEY ontbreekt in Render Environment Variables."
         )
 
     prompt_text = """
-Je bent een Pokémon TCG expert en taxateur. Bekijk de afbeelding zeer nauwkeurig.
+Je bent een Pokémon TCG expert en taxateur. Bekijk de afbeelding nauwkeurig.
 Er kunnen 1, 2 of meer kaarten op de foto liggen (los, op tafel, in sleeves of toploaders).
 
-Identificeer voor IEDERE afzonderlijke Pokémon kaart op de foto:
-1. "cardName": Exacte officiële kaartnaam (bijv. "Pikachu & Zekrom GX", "Palkia LV.X").
-2. "setCode": Setcode linksonder of rechtsonder (bijv. "CEL", "SM", "SVP", "SWSH").
+Identificeer voor IEDERE Pokémon kaart:
+1. "cardName": Exacte kaartnaam (bijv. "Pikachu & Zekrom GX", "Palkia LV.X").
+2. "setCode": Setcode linksonder of rechtsonder (bijv. "CEL", "SM", "SVP", "DP").
 3. "cardNumber": Het exacte kaartnummer (bijv. "106", "SM248", "162").
-4. "setTotal": Het totaalaantal van de reeks indien zichtbaar (bijv. "106").
-5. "setName": De volledige serienaam (bijv. "Celebrations: Classic Collection").
+4. "setTotal": Het totaalaantal van de serie (bijv. "106").
+5. "setName": De serienaam (bijv. "Celebrations: Classic Collection").
 6. "language": De taal ("Engels", "Japans", etc.).
 7. "languageCode": "EN" of "JP".
-8. "rarity": Zeldzaamheid ("Classic Collection", "Promo", "Ultra Rare", etc.).
+8. "rarity": Zeldzaamheid ("Classic Collection", "Ultra Rare", etc.).
 9. "condition": "Near Mint (NM)", "Lightly Played (LP)" of "Played (PL)".
-10. "conditionReason": Korte beschrijving van de visuele staat op de foto.
+10. "conditionReason": Korte beschrijving van de visuele staat.
 
-Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde kaart.
-Geef geen markdown opmaak of extra tekst, alleen de JSON array.
+Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per kaart. Geen introductie of markdown opmaak.
 """
 
     gemini_body = {
@@ -273,35 +264,20 @@ Geef geen markdown opmaak of extra tekst, alleen de JSON array.
             }
         ],
         "generationConfig": {
-            "responseMimeType": "application/json"
+            "responseMimeType": "application/json",
+            "temperature": 0.1,
+            "maxOutputTokens": 2048
         }
     }
 
     raw_text = ""
-    error_logs = []
+    last_error = ""
 
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        # Dynamisch de actieve modellen voor deze specifieke Google API-sleutel ophalen
-        discovered_models = []
-        try:
-            list_resp = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
-            if list_resp.status_code == 200:
-                for item in list_resp.json().get("models", []):
-                    m_name = item.get("name", "").replace("models/", "")
-                    methods = item.get("supportedGenerationMethods", [])
-                    if "generateContent" in methods:
-                        discovered_models.append(m_name)
-        except Exception as e:
-            error_logs.append(f"Model-lijst ophalen: {str(e)[:60]}")
+    # Lijst van geschikte modellen in volgorde van voorkeur
+    candidate_models = ["gemini-2.0-flash", "gemini-flash-latest"]
 
-        # Gebruik primair het model dat letterlijk in jouw AI Studio code snippet stond
-        preferred = ["gemini-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash"]
-        models_to_try = [m for m in preferred if m in discovered_models]
-        if not models_to_try:
-            # Fallback op elk actief model dat content kan genereren
-            models_to_try = [m for m in discovered_models if "flash" in m] or ["gemini-flash-latest"]
-
-        for model_name in models_to_try:
+    async with httpx.AsyncClient(timeout=35.0) as client:
+        for model_name in candidate_models:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             try:
                 res = await client.post(gemini_url, json=gemini_body)
@@ -310,27 +286,19 @@ Geef geen markdown opmaak of extra tekst, alleen de JSON array.
                     candidates = res_json.get("candidates", [])
                     if candidates:
                         parts = candidates[0].get("content", {}).get("parts", [])
-                        extracted_text = ""
-                        for part in parts:
-                            if "text" in part and part["text"]:
-                                extracted_text += part["text"]
-                        
-                        if extracted_text.strip():
-                            raw_text = extracted_text.strip()
+                        extracted = "".join([p.get("text", "") for p in parts if "text" in p])
+                        if extracted.strip():
+                            raw_text = extracted.strip()
                             break
-                        else:
-                            finish_r = candidates[0].get("finishReason", "GEEN_TEKST")
-                            error_logs.append(f"{model_name}: finishReason={finish_r}")
                 else:
-                    error_logs.append(f"{model_name} (HTTP {res.status_code}): {res.text[:90]}")
+                    last_error = f"{model_name} (HTTP {res.status_code}): {res.text[:100]}"
             except Exception as e:
-                error_logs.append(f"{model_name} fout: {str(e)[:90]}")
+                last_error = f"{model_name} timeout/fout: {str(e)[:80]}"
 
     if not raw_text:
-        diagnose = " | ".join(error_logs[-2:]) if error_logs else "Geen actief AI-model gevonden"
         raise HTTPException(
-            status_code=502, 
-            detail=f"Google AI Vision kon niet worden geraadpleegd: {diagnose}"
+            status_code=502,
+            detail=f"Google AI Vision kon niet worden geraadpleegd: {last_error or 'Geen reactie ontvangen'}"
         )
 
     try:
@@ -350,23 +318,23 @@ Geef geen markdown opmaak of extra tekst, alleen de JSON array.
         raise HTTPException(status_code=500, detail=f"Kon kaartgegevens niet ontleden: {str(e)}")
 
     if not detected_cards:
-        raise HTTPException(status_code=404, detail="Geen kaarten herkend op de foto. Zorg voor voldoende licht.")
+        raise HTTPException(status_code=404, detail="Geen kaarten herkend op de foto. Zorg voor goed licht en scherpte.")
 
-    # Voor elke herkende kaart live Cardmarket NL gegevens ophalen
-    results = []
-    for card in detected_cards:
+    # Haal parallel de Cardmarket gegevens op voor alle gevonden kaarten
+    async def process_single_card(card: dict):
         cm_data = await fetch_cardmarket_data(
             card_name=card.get("cardName", "Pokémon Kaart"),
             card_number=str(card.get("cardNumber", "")),
             language=card.get("languageCode", "EN"),
             condition="NM" if "Near" in card.get("condition", "NM") else "LP"
         )
-        results.append({
+        return {
             **card,
             "estimatedPriceEUR": cm_data.lowest_nl_price_eur,
             "priceTrendEUR": cm_data.price_trend_eur,
             "avg30DaysEUR": cm_data.avg30_days_eur,
             "directCardmarketUrl": cm_data.product_url
-        })
+        }
 
-    return results
+    results = await asyncio.gather(*[process_single_card(card) for card in detected_cards])
+    return list(results)
