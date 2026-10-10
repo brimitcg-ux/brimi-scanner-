@@ -175,10 +175,11 @@
             </p>
         </div>
 
-        <!-- CAMERA VIEWFINDER -->
+        <!-- CAMERA & UPLOAD VIEWFINDER -->
         <div class="w-full">
             <label for="file-input" id="drop-zone" class="glass-panel relative block rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 group border border-night-border/60 hover:border-night-slate/60 active:scale-[0.99] glow-accent">
-                <input type="file" id="file-input" class="hidden" accept="image/*" capture="environment">
+                <!-- Geen capture="environment", zodat iOS het volledige keuzemenu toont (Foto maken / Fotobibliotheek / Bestanden) -->
+                <input type="file" id="file-input" class="hidden" accept="image/*">
                 
                 <div class="vf-corner vf-tl"></div>
                 <div class="vf-corner vf-tr"></div>
@@ -192,7 +193,7 @@
 
                     <div class="space-y-1">
                         <p class="text-base font-extrabold text-white">
-                            Maak direct een foto of upload
+                            Maak een foto of kies uit bibliotheek
                         </p>
                         <p class="text-xs text-night-slate font-medium">
                             Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
@@ -200,8 +201,8 @@
                     </div>
 
                     <span class="inline-flex items-center gap-2 bg-white text-night-base font-black px-5 py-2.5 rounded-2xl text-xs group-hover:bg-slate-100 transition shadow-lg">
-                        <i class="fa-solid fa-camera"></i>
-                        <span>Start Camera Scanner</span>
+                        <i class="fa-solid fa-images"></i>
+                        <span>Foto Maken of Uploaden</span>
                     </span>
                 </div>
 
@@ -332,7 +333,7 @@
     <script>
         const BACKEND_URL = "https://brimi-scanner.onrender.com";
 
-        // Pre-warm ping
+        // Pre-warm ping naar Render bij pagina-opening
         window.addEventListener('DOMContentLoaded', () => {
             fetch(`${BACKEND_URL}/`).catch(() => {});
         });
