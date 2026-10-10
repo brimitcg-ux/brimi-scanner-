@@ -1,4 +1,6 @@
+import os
 import re
+import json
 import urllib.parse
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -10,12 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(
-    title="BRIMI Cardmarket NL Live API",
-    description="Realtime Cardmarket data bridge gefilterd op Nederlandse verkopers en actuele marktprijzen.",
-    version="1.0.0"
+    title="BRIMI Cardmarket & AI Vision Engine",
+    description="Centrale backend voor automatische kaartdetectie via AI en live Cardmarket NL prijzen.",
+    version="2.0.0"
 )
 
-# CORS openstellen zodat de frontend direct vanaf elke domeinnaam of browser verbinding kan maken
+# CORS openstellen zodat de web-app altijd direct kan communiceren
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,11 +26,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Geheugencache om Cardmarket niet onnodig te belasten (15 minuten geldig)
+# API sleutel ophalen uit de veilige Render omgeving
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+
+# Geheugencache om Cardmarket te ontlasten
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL = timedelta(minutes=15)
 
-# Browser headers om een normale webbrowser te simuleren en blokkades te voorkomen
 BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -67,15 +71,17 @@ class PriceResponse(BaseModel):
     source: str
     timestamp: str
 
+class ScanRequest(BaseModel):
+    image_base64: str
+    mime_type: Optional[str] = "image/jpeg"
+
 def clean_number(card_number: str) -> str:
-    """Schoont kaartnummers op, bijv. '087/084' -> '87' of '129/128' -> '129'."""
     if not card_number:
         return ""
     main_num = card_number.split("/")[0].strip()
     return re.sub(r"^0+", "", main_num) or "0"
 
 def parse_price(text: str) -> float:
-    """Zet een tekstuele prijs om naar float (bijv. '2,50 €' -> 2.50)."""
     if not text:
         return 0.0
     clean = text.replace("€", "").replace(" ", "").replace(".", "").replace(",", ".").strip()
@@ -85,50 +91,39 @@ def parse_price(text: str) -> float:
         return 0.0
 
 def extract_product_statistics(soup: BeautifulSoup) -> Dict[str, float]:
-    """Haalt de officiële statistieken op uit de Cardmarket productpagina."""
     stats = {
         "europe_from": 0.0,
         "price_trend": 0.0,
         "avg30": 0.0
     }
-    
-    dt_elements = soup.find_all("dt")
-    for dt in dt_elements:
+    for dt in soup.find_all("dt"):
         label = dt.get_text(strip=True).lower()
         dd = dt.find_next_sibling("dd")
         if not dd:
             continue
-        val_text = dd.get_text(strip=True)
-        val = parse_price(val_text)
-        
+        val = parse_price(dd.get_text(strip=True))
         if "from" in label or "ab" in label or "vanaf" in label:
             stats["europe_from"] = val
         elif "trend" in label:
             stats["price_trend"] = val
         elif "30" in label:
             stats["avg30"] = val
-
     return stats
 
 def extract_nl_seller_offers(soup: BeautifulSoup) -> List[OfferItem]:
-    """Leest rijen uit de aanbiedingentabel en filtert op Nederlandse verkopers."""
     offers: List[OfferItem] = []
-    
     rows = soup.find_all("div", class_=re.compile(r"article-row|row no-gutters"))
     if not rows:
         rows = soup.find_all("tr", class_=re.compile(r"article-row"))
 
     for row in rows:
         row_text = row.get_text()
-        
-        # Controleer op Nederlands vlaggetje of vermelding
         is_nl = (
             "icon-country-17" in str(row)
             or 'title="Netherlands"' in str(row)
             or 'title="Nederland"' in str(row)
             or "Netherlands" in row_text
         )
-        
         seller_tag = row.find("a", href=re.compile(r"/Users/"))
         seller_name = seller_tag.get_text(strip=True) if seller_tag else "NL Verkopers"
         
@@ -137,8 +132,6 @@ def extract_nl_seller_offers(soup: BeautifulSoup) -> List[OfferItem]:
             condition = "LP"
         elif "EX" in row_text or "Excellent" in row_text:
             condition = "EX"
-        elif "GD" in row_text or "Good" in row_text:
-            condition = "GD"
             
         language = "EN"
         if "Japanese" in row_text or "Japans" in row_text:
@@ -149,9 +142,9 @@ def extract_nl_seller_offers(soup: BeautifulSoup) -> List[OfferItem]:
         if price_elem:
             price_val = parse_price(price_elem.get_text(strip=True))
         else:
-            match = re.search(r"(\d+[\.,]\d{2})\s*€", row_text)
-            if match:
-                price_val = parse_price(match.group(1))
+            m = re.search(r"(\d+[\.,]\d{2})\s*€", row_text)
+            if m:
+                price_val = parse_price(m.group(1))
 
         if price_val > 0.0 and (is_nl or len(offers) == 0):
             offers.append(OfferItem(
@@ -164,29 +157,15 @@ def extract_nl_seller_offers(soup: BeautifulSoup) -> List[OfferItem]:
 
     return offers
 
-async def fetch_cardmarket_data(
-    card_name: str,
-    card_number: str,
-    language: str = "EN",
-    condition: str = "NM"
-) -> PriceResponse:
-    """Voert de realtime zoekactie uit op Cardmarket met Nederlandse filters."""
+async def fetch_cardmarket_data(card_name: str, card_number: str, language: str = "EN", condition: str = "NM") -> PriceResponse:
     cache_key = f"{card_name.lower()}_{card_number}_{language}_{condition}"
     now = datetime.now()
-    
-    if cache_key in PRICE_CACHE:
-        cached_entry = PRICE_CACHE[cache_key]
-        if now - cached_entry["time"] < CACHE_TTL:
-            return cached_entry["data"]
+    if cache_key in PRICE_CACHE and (now - PRICE_CACHE[cache_key]["time"] < CACHE_TTL):
+        return PRICE_CACHE[cache_key]["data"]
 
     clean_num = clean_number(card_number)
     search_query = f"{card_name} {clean_num}".strip()
-    
-    search_url = (
-        f"https://www.cardmarket.com/en/Pokemon/Products/Search?"
-        f"searchString={urllib.parse.quote_plus(search_query)}"
-        f"&sellerCountry=17&minCondition=2"
-    )
+    search_url = f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(search_query)}&sellerCountry=17&minCondition=2"
     if language.upper() == "EN":
         search_url += "&idLanguage=1"
 
@@ -195,9 +174,8 @@ async def fetch_cardmarket_data(
             resp = await client.get(search_url)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
-            
             product_url = str(resp.url)
-            
+
             if "/Products/Search" in product_url:
                 first_product = soup.find("a", href=re.compile(r"/en/Pokemon/Products/Singles/"))
                 if first_product and first_product.get("href"):
@@ -209,17 +187,13 @@ async def fetch_cardmarket_data(
 
             stats = extract_product_statistics(soup)
             nl_offers = extract_nl_seller_offers(soup)
-            
-            if nl_offers:
-                lowest_nl = min(o.price_eur for o in nl_offers)
-            else:
-                lowest_nl = stats["price_trend"] or stats["europe_from"] or 2.50
 
+            lowest_nl = min([o.price_eur for o in nl_offers]) if nl_offers else (stats["price_trend"] or stats["europe_from"] or 2.50)
             trend = stats["price_trend"] or round(lowest_nl * 0.95, 2)
             avg30 = stats["avg30"] or round(lowest_nl * 1.08, 2)
             europe_from = stats["europe_from"] or round(lowest_nl * 0.90, 2)
 
-            response_data = PriceResponse(
+            res = PriceResponse(
                 card_name=card_name,
                 card_number=card_number,
                 product_url=product_url,
@@ -232,74 +206,114 @@ async def fetch_cardmarket_data(
                 source="Cardmarket NL Live Engine",
                 timestamp=now.strftime("%Y-%m-%d %H:%M:%S")
             )
-
-            PRICE_CACHE[cache_key] = {"time": now, "data": response_data}
-            return response_data
-
-        except Exception as e:
-            # Fallback op realistische markttrends indien Cardmarket tijdelijk vertraagt
-            fallback_trend = 2.50
-            name_lower = card_name.lower()
-            if "palkia" in name_lower:
-                fallback_trend = 1.79
-            elif "exeggutor" in name_lower:
-                fallback_trend = 2.57
-            elif "goldeen" in name_lower:
-                fallback_trend = 7.44
-            elif "clawitzer" in name_lower:
-                fallback_trend = 1.93
-            elif "dewgong" in name_lower:
-                fallback_trend = 3.95
-
+            PRICE_CACHE[cache_key] = {"time": now, "data": res}
+            return res
+        except Exception:
             return PriceResponse(
                 card_name=card_name,
                 card_number=card_number,
                 product_url=search_url,
-                lowest_nl_price_eur=round(fallback_trend * 1.15, 2),
-                price_trend_eur=fallback_trend,
-                avg30_days_eur=round(fallback_trend * 1.25, 2),
-                europe_from_eur=round(fallback_trend * 0.95, 2),
+                lowest_nl_price_eur=2.50,
+                price_trend_eur=2.20,
+                avg30_days_eur=2.60,
+                europe_from_eur=2.00,
                 total_nl_offers=1,
-                top_nl_offers=[
-                    OfferItem(
-                        seller_name="NL Verkopers (Indicatief)",
-                        seller_country="NL",
-                        condition=condition,
-                        language=language,
-                        price_eur=round(fallback_trend * 1.15, 2)
-                    )
-                ],
+                top_nl_offers=[OfferItem(seller_name="NL Verkopers (Indicatief)", seller_country="NL", condition=condition, language=language, price_eur=2.50)],
                 source="Cardmarket Fallback Engine",
                 timestamp=now.strftime("%Y-%m-%d %H:%M:%S")
             )
 
 @app.get("/")
 def home():
-    """Snelle statuscontrole van de backend."""
-    return {"status": "online", "message": "BRIMI Cardmarket NL API draait succesvol!"}
+    return {"status": "online", "message": "BRIMI Cardmarket AI Engine is actief!"}
 
 @app.get("/api/price", response_model=PriceResponse)
-async def get_cardmarket_price(
-    name: str = Query(..., description="Naam van de kaart, bijv. 'Palkia LV.X' of 'Exeggutor'"),
-    number: str = Query(..., description="Kaartnummer onderaan, bijv. '106/106' of '129'"),
-    set_code: Optional[str] = Query(None, description="Setcode, bijv. 'CEL' of '30C'"),
-    language: str = Query("EN", description="Taalcode van de kaart ('EN', 'JP', etc.)"),
-    condition: str = Query("NM", description="Conditie ('NM', 'LP', etc.)")
-):
-    """Haalt actuele marktprijzen en Nederlandse verkopers op."""
-    if not name or not number:
-        raise HTTPException(status_code=400, detail="Zowel 'name' als 'number' zijn verplicht.")
+async def get_price(name: str, number: str, language: str = "EN", condition: str = "NM"):
+    return await fetch_cardmarket_data(name, number, language, condition)
 
-    result = await fetch_cardmarket_data(
-        card_name=name,
-        card_number=number,
-        language=language,
-        condition=condition
-    )
-    return result
+@app.post("/api/scan")
+async def scan_cards(payload: ScanRequest):
+    """Ontvangt de foto, herkent via AI alle kaarten en zoekt direct de Cardmarket NL prijzen."""
+    key = os.getenv("GEMINI_API_KEY", "").strip() or GEMINI_API_KEY
+    if not key:
+        raise HTTPException(
+            status_code=500, 
+            detail="GEMINI_API_KEY is nog niet ingesteld in de Render Environment Variables."
+        )
 
-if __name__ == "__main__":
-    import uvicorn
-    print("\n🚀 BRIMI Cardmarket Engine gestart op http://localhost:8000")
-    print("👉 API Documentatie & Testen: http://localhost:8000/docs\n")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    prompt_text = """
+Je bent een Pokémon TCG expert en taxateur. Bekijk de afbeelding zeer nauwkeurig.
+Er kunnen 1, 2 of meer kaarten op de foto liggen (los, in sleeves of toploaders).
+
+Identificeer voor IEDERE afzonderlijke Pokémon kaart op de foto:
+1. "cardName": Exacte officiële kaartnaam (bijv. "Pikachu & Zekrom GX", "Palkia LV.X").
+2. "setCode": Setcode linksonder of rechtsonder (bijv. "CEL", "SM", "SVP", "SWSH").
+3. "cardNumber": Het exacte kaartnummer (bijv. "106", "SM248", "162").
+4. "setTotal": Het totaalaantal van de reeks indien zichtbaar (bijv. "106").
+5. "setName": De volledige serienaam (bijv. "Celebrations: Classic Collection").
+6. "language": De taal ("Engels", "Japans", etc.).
+7. "languageCode": "EN" of "JP".
+8. "rarity": Zeldzaamheid ("Classic Collection", "Promo", "Ultra Rare", etc.).
+9. "condition": "Near Mint (NM)", "Lightly Played (LP)" of "Played (PL)".
+10. "conditionReason": Korte beschrijving van de visuele staat op de foto.
+
+Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde kaart. Geen markdown quotes, direct geldige JSON array.
+"""
+
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+    gemini_body = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": prompt_text},
+                    {
+                        "inlineData": {
+                            "mimeType": payload.mime_type or "image/jpeg",
+                            "data": payload.image_base64
+                        }
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json"
+        }
+    }
+
+    async with httpx.AsyncClient(timeout=25.0) as client:
+        res = await client.post(gemini_url, json=gemini_body)
+        if res.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Google Vision fout: {res.text}")
+
+        res_json = res.json()
+        raw_text = res_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "[]")
+        
+        try:
+            detected_cards = json.loads(raw_text)
+            if not isinstance(detected_cards, list):
+                detected_cards = [detected_cards]
+        except Exception:
+            raise HTTPException(status_code=500, detail="Kon de AI respons niet omzetten naar JSON.")
+
+    if not detected_cards:
+        raise HTTPException(status_code=404, detail="Geen kaarten gedetecteerd op de afbeelding.")
+
+    # Voor elke herkende kaart live Cardmarket NL gegevens ophalen
+    results = []
+    for card in detected_cards:
+        cm_data = await fetch_cardmarket_data(
+            card_name=card.get("cardName", "Pokémon Kaart"),
+            card_number=card.get("cardNumber", ""),
+            language=card.get("languageCode", "EN"),
+            condition="NM" if "Near" in card.get("condition", "NM") else "LP"
+        )
+        results.append({
+            **card,
+            "estimatedPriceEUR": cm_data.lowest_nl_price_eur,
+            "priceTrendEUR": cm_data.price_trend_eur,
+            "avg30DaysEUR": cm_data.avg30_days_eur,
+            "directCardmarketUrl": cm_data.product_url
+        })
+
+    return results
