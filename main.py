@@ -14,7 +14,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="BRIMI Turbo Scanner Engine",
     description="Supersnelle Pokémon kaartdetectie met directe Cardmarket NL koppeling.",
-    version="6.0.0"
+    version="6.5.0"
 )
 
 # Open CORS voor iPhone Safari en PWA
@@ -28,6 +28,10 @@ app.add_middleware(
 
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL = timedelta(hours=4)
+
+# Cache voor beschikbare Google AI modellen (1 uur geldig)
+MODELS_CACHE: List[str] = []
+MODELS_CACHE_TIME: Optional[datetime] = None
 
 class ScanRequest(BaseModel):
     image_base64: str
@@ -51,8 +55,48 @@ def get_ebay_url(card_name: str, card_number: str, lang: str = "") -> str:
     query = f"pokemon {card_name} {card_number} {lang}".strip()
     return f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(query)}&LH_Sold=1&LH_Complete=1"
 
+async def get_working_gemini_models(api_key: str) -> List[str]:
+    """Haalt dynamisch de actuele, beschikbare modellen op die generateContent ondersteunen."""
+    global MODELS_CACHE, MODELS_CACHE_TIME
+    now = datetime.now()
+    if MODELS_CACHE and MODELS_CACHE_TIME and (now - MODELS_CACHE_TIME < timedelta(hours=1)):
+        return MODELS_CACHE
+
+    discovered: List[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}")
+            if res.status_code == 200:
+                data = res.json()
+                for m in data.get("models", []):
+                    methods = m.get("supportedGenerationMethods", [])
+                    name = m.get("name", "")
+                    if "generateContent" in methods and "flash" in name.lower():
+                        discovered.append(name)
+    except Exception:
+        pass
+
+    # Betrouwbare fallback-lijst met actuele modelnamen
+    fallback_priority = [
+        "models/gemini-2.0-flash",
+        "models/gemini-2.0-flash-lite",
+        "models/gemini-1.5-flash-latest",
+        "models/gemini-1.5-flash",
+        "models/gemini-1.5-flash-8b"
+    ]
+    
+    # Voeg ontdekte modellen vooraan toe en vul aan met fallbacks
+    combined = []
+    for m in discovered + fallback_priority:
+        if m not in combined:
+            combined.append(m)
+
+    MODELS_CACHE = combined
+    MODELS_CACHE_TIME = now
+    return combined
+
 async def resolve_cardmarket_price(card_name: str, card_number: str, language_code: str, ai_estimate: float) -> Dict[str, Any]:
-    """Snelle prijsresolutie met caching zonder vertragende sequentiële database time-outs."""
+    """Snelle prijsresolutie met caching zonder vertraging."""
     clean_num = clean_card_number(card_number)
     cache_key = f"{card_name.lower()}_{clean_num}_{language_code}".strip()
     now = datetime.now()
@@ -76,9 +120,9 @@ async def resolve_cardmarket_price(card_name: str, card_number: str, language_co
     resolved_price = round(max(ai_estimate, 1.50), 2)
     source = "Cardmarket NL Richtprijs"
 
-    # Razendsnelle check (max 1.8s) op TCGdex
+    # Razendsnelle check (max 1.5s) op TCGdex
     try:
-        async with httpx.AsyncClient(timeout=1.8) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             search_url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(card_name)}"
             resp = await client.get(search_url)
             if resp.status_code == 200:
@@ -110,19 +154,19 @@ async def resolve_cardmarket_price(card_name: str, card_number: str, language_co
 
 @app.get("/")
 def ping():
-    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.0.0"}
+    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.5.0"}
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ontbreekt op Render.")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ontbreekt op Render Environment Variables.")
 
     prompt = """
 Analyseer deze Pokémon kaartfoto direct:
-1. Naam: officiële Engelse Pokémon naam.
-2. Nummer: linksonder/rechtsonder vóór de streep.
-3. Totaal: na de streep.
+1. Naam: officiële Engelse Pokémon naam (bijv. Dewgong, Misty's Vitality, Leafeon ex, Alolan Exeggutor).
+2. Nummer: cijfers vóór de streep (bijv. '097' uit '097/094').
+3. Totaal: cijfers na de streep (bijv. '094').
 4. Setcode: letters linksonder (bijv. PBL, PFL, ME05, SVE).
 5. Setnaam: herken de reeks (bijv. Pitch Black, Phantasmal Flames, Surging Sparks).
 6. Taal: Chinees indien vereenvoudigde karakters (taalCode: 'CN'), Japans ('JP') of Engels ('EN').
@@ -166,33 +210,37 @@ JSON Formaat:
         }
     }
 
-    # Directe snelle modellen zonder trage /models ontdekkingslus
-    fast_models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
+    candidate_models = await get_working_gemini_models(key)
     raw_text = ""
-    last_err = ""
+    error_log = []
 
-    async with httpx.AsyncClient(timeout=14.0) as client:
-        for model in fast_models:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    async with httpx.AsyncClient(timeout=16.0) as client:
+        for model in candidate_models[:4]:
+            # Zorg dat de URL het correcte pad bevat
+            model_path = model if model.startswith("models/") else f"models/{model}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:generateContent?key={key}"
+            
             try:
-                res = await client.post(url, json=gemini_body, headers={"x-goog-api-key": key})
+                res = await client.post(url, json=gemini_body)
                 if res.status_code == 200:
-                    cand = res.json().get("candidates", [])
-                    if cand:
-                        parts = cand[0].get("content", {}).get("parts", [])
+                    cands = res.json().get("candidates", [])
+                    if cands:
+                        parts = cands[0].get("content", {}).get("parts", [])
                         raw_text = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
                         if raw_text:
                             break
-                elif res.status_code in [429, 503]:
+                elif res.status_code in [404, 503, 429]:
+                    error_log.append(f"{model_path} ({res.status_code})")
                     continue
                 else:
-                    last_err = f"{model} status {res.status_code}"
+                    error_log.append(f"{model_path} ({res.status_code})")
             except Exception as e:
-                last_err = str(e)[:40]
+                error_log.append(f"{model_path} ({type(e).__name__})")
                 continue
 
     if not raw_text:
-        raise HTTPException(status_code=502, detail=f"AI Vision timeout: {last_err or 'probeer direct nogmaals'}")
+        detail_msg = f"Geen respons van AI Vision. Pogingen: {', '.join(error_log[-2:])}" if error_log else "AI Vision time-out."
+        raise HTTPException(status_code=502, detail=detail_msg)
 
     # JSON opschonen
     cleaned = raw_text.strip()
@@ -205,8 +253,8 @@ JSON Formaat:
         cards_data = json.loads(cleaned)
         if not isinstance(cards_data, list):
             cards_data = [cards_data]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ongeldige kaartrespons van AI")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Ongeldig antwoord van AI Vision.")
 
     async def enrich_card(c: dict):
         price_info = await resolve_cardmarket_price(
