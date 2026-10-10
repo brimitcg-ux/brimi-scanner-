@@ -15,7 +15,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="BRIMI Cardmarket & AI Vision Engine",
     description="Productie backend voor automatische Pokémon detectie en live Cardmarket NL marktprijzen.",
-    version="3.1.0"
+    version="3.2.0"
 )
 
 # CORS geconfigureerd voor iOS Safari en GitHub Pages
@@ -219,6 +219,34 @@ def home():
 async def get_price(name: str, number: str, language: str = "EN", condition: str = "NM"):
     return await fetch_cardmarket_data(name, number, language, condition)
 
+async def discover_available_models(client: httpx.AsyncClient, key: str) -> List[str]:
+    """Vraagt dynamisch bij Google op welke modellen direct beschikbaar zijn."""
+    url = "https://generativelanguage.googleapis.com/v1beta/models"
+    headers = {"x-goog-api-key": key}
+    try:
+        r = await client.get(url, headers=headers, timeout=6.0)
+        if r.status_code == 200:
+            data = r.json()
+            models_list = data.get("models", [])
+            # Filter op modellen die generateContent ondersteunen
+            valid_models = []
+            for m in models_list:
+                name = m.get("name", "").replace("models/", "")
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods and "flash" in name.lower():
+                    valid_models.append(name)
+            if valid_models:
+                # Sorteer met voorkeur voor 2.0 / lite boven 1.5
+                priority_order = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-flash-latest", "gemini-1.5-flash"]
+                sorted_models = [m for m in priority_order if m in valid_models]
+                for m in valid_models:
+                    if m not in sorted_models:
+                        sorted_models.append(m)
+                return sorted_models
+    except Exception:
+        pass
+    return ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-flash-latest"]
+
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
     """Ontvangt een foto, herkent via Google Gemini alle kaarten en haalt Cardmarket NL data op."""
@@ -273,47 +301,48 @@ Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per kaart. Geen i
     raw_text = ""
     last_error = ""
 
-    # Lijst van geschikte modellen in volgorde van voorkeur
-    # Als een model druk is (503), wordt direct het volgende model geprobeerd
-    candidate_models = [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-        "gemini-1.5-flash",
-        "gemini-flash-latest"
-    ]
+    request_timeout = httpx.Timeout(18.0, connect=8.0)
+    async with httpx.AsyncClient(timeout=request_timeout) as client:
+        # Haal actieve modellen dynamisch op voor dit specifieke account
+        candidate_models = await discover_available_models(client, key)
 
-    async with httpx.AsyncClient(timeout=35.0) as client:
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": key
+        }
+
         for model_name in candidate_models:
-            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
-            for attempt in range(2):  # 1 directe poging, 1 retry bij 503
-                try:
-                    res = await client.post(gemini_url, json=gemini_body)
-                    if res.status_code == 200:
-                        res_json = res.json()
-                        candidates = res_json.get("candidates", [])
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            extracted = "".join([p.get("text", "") for p in parts if "text" in p])
-                            if extracted.strip():
-                                raw_text = extracted.strip()
-                                break
-                    elif res.status_code in [503, 429]:
-                        last_error = f"{model_name} (HTTP {res.status_code}: drukte bij Google)"
-                        await asyncio.sleep(1.0)
-                        continue
-                    else:
-                        last_error = f"{model_name} (HTTP {res.status_code})"
-                        break
-                except Exception as e:
-                    last_error = f"{model_name} uitzondering: {str(e)[:60]}"
-                    break
-            if raw_text:
-                break
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+            try:
+                res = await client.post(gemini_url, json=gemini_body, headers=headers)
+                if res.status_code == 200:
+                    res_json = res.json()
+                    candidates = res_json.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        extracted = "".join([p.get("text", "") for p in parts if "text" in p])
+                        if extracted.strip():
+                            raw_text = extracted.strip()
+                            break
+                elif res.status_code in [503, 429]:
+                    last_error = f"{model_name} (Google drukte: HTTP {res.status_code})"
+                    continue
+                else:
+                    err_msg = res.text[:80] if res.text else f"HTTP {res.status_code}"
+                    last_error = f"{model_name}: {err_msg}"
+                    continue
+            except httpx.TimeoutException:
+                last_error = f"{model_name} time-out (>18s)"
+                continue
+            except Exception as e:
+                err_detail = str(e).strip() or type(e).__name__
+                last_error = f"{model_name}: {err_detail[:60]}"
+                continue
 
     if not raw_text:
         raise HTTPException(
             status_code=502,
-            detail=f"Google AI Vision is tijdelijk overbelast: {last_error or 'Probeer over enkele seconden nogmaals'}"
+            detail=f"Google AI Vision niet bereikbaar ({last_error or 'overbelast'}). Probeer het direct nogmaals."
         )
 
     try:
