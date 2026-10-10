@@ -15,7 +15,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="BRIMI Cardmarket & AI Vision Engine",
     description="Productie backend voor automatische Pokémon detectie en live Cardmarket NL marktprijzen.",
-    version="3.0.0"
+    version="3.1.0"
 )
 
 # CORS geconfigureerd voor iOS Safari en GitHub Pages
@@ -274,31 +274,46 @@ Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per kaart. Geen i
     last_error = ""
 
     # Lijst van geschikte modellen in volgorde van voorkeur
-    candidate_models = ["gemini-2.0-flash", "gemini-flash-latest"]
+    # Als een model druk is (503), wordt direct het volgende model geprobeerd
+    candidate_models = [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+        "gemini-flash-latest"
+    ]
 
     async with httpx.AsyncClient(timeout=35.0) as client:
         for model_name in candidate_models:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
-            try:
-                res = await client.post(gemini_url, json=gemini_body)
-                if res.status_code == 200:
-                    res_json = res.json()
-                    candidates = res_json.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        extracted = "".join([p.get("text", "") for p in parts if "text" in p])
-                        if extracted.strip():
-                            raw_text = extracted.strip()
-                            break
-                else:
-                    last_error = f"{model_name} (HTTP {res.status_code}): {res.text[:100]}"
-            except Exception as e:
-                last_error = f"{model_name} timeout/fout: {str(e)[:80]}"
+            for attempt in range(2):  # 1 directe poging, 1 retry bij 503
+                try:
+                    res = await client.post(gemini_url, json=gemini_body)
+                    if res.status_code == 200:
+                        res_json = res.json()
+                        candidates = res_json.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            extracted = "".join([p.get("text", "") for p in parts if "text" in p])
+                            if extracted.strip():
+                                raw_text = extracted.strip()
+                                break
+                    elif res.status_code in [503, 429]:
+                        last_error = f"{model_name} (HTTP {res.status_code}: drukte bij Google)"
+                        await asyncio.sleep(1.0)
+                        continue
+                    else:
+                        last_error = f"{model_name} (HTTP {res.status_code})"
+                        break
+                except Exception as e:
+                    last_error = f"{model_name} uitzondering: {str(e)[:60]}"
+                    break
+            if raw_text:
+                break
 
     if not raw_text:
         raise HTTPException(
             status_code=502,
-            detail=f"Google AI Vision kon niet worden geraadpleegd: {last_error or 'Geen reactie ontvangen'}"
+            detail=f"Google AI Vision is tijdelijk overbelast: {last_error or 'Probeer over enkele seconden nogmaals'}"
         )
 
     try:
