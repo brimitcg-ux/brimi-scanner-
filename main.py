@@ -15,7 +15,7 @@ from pydantic import BaseModel
 app = FastAPI(
     title="BRIMI Turbo Scanner Engine",
     description="Pokémon kaartdetectie met Cardmarket NL voor singles en live PriceCharting voor graded slabs.",
-    version="6.8.0"
+    version="7.0.0"
 )
 
 app.add_middleware(
@@ -62,10 +62,75 @@ def get_ebay_sold_url(card_name: str, card_number: str, slab_info: Optional[str]
         query = f"{slab_info} {query}"
     return f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(query.strip())}&LH_Sold=1&LH_Complete=1"
 
-async def fetch_live_pricecharting_price(card_name: str, card_number: str, grade_str: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Haalt realtime de exacte veilingprijzen (Grade 8, Grade 9, PSA 10, etc.) van PriceCharting op."""
+async def fetch_live_pricecharting_via_grounding(
+    card_name: str, 
+    card_number: str, 
+    set_name: Optional[str],
+    grading_company: Optional[str], 
+    grade: Optional[str],
+    api_key: str
+) -> Optional[Dict[str, Any]]:
+    """Haalt realtime de exacte PriceCharting koers op via Google Search Grounding (omzeilt Cloudflare IP-blokkades van Render)."""
     clean_num = clean_card_number(card_number)
-    # Zoek zonder overbodige woorden voor maximale trefzekerheid op PriceCharting
+    grader = (grading_company or "PSA").upper()
+    grade_val = str(grade or "9").strip()
+    grade_query = f"{grader} {grade_val}"
+
+    prompt = f"""
+Find the current official PriceCharting price for this graded Pokemon slab:
+Card: Pokemon {card_name} #{clean_num}
+Set: {set_name or ''}
+Grade: {grade_query} (PriceCharting column: Grade {grade_val} or PSA {grade_val})
+
+Search pricecharting.com for the exact current price in USD.
+Output ONLY a valid JSON object in this exact format:
+{{"price_usd": 15.85, "found": true}}
+If you cannot find the PriceCharting price, output:
+{{"found": false}}
+"""
+
+    gemini_payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [{"text": prompt}]
+        }],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {
+            "temperature": 0.0,
+            "maxOutputTokens": 200
+        }
+    }
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+
+    try:
+        async with httpx.AsyncClient(timeout=7.0) as client:
+            resp = await client.post(url, json=gemini_payload)
+            if resp.status_code == 200:
+                cands = resp.json().get("candidates", [])
+                if cands:
+                    parts = cands[0].get("content", {}).get("parts", [])
+                    txt = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
+                    m = re.search(r"\{.*?\}", txt, re.DOTALL)
+                    if m:
+                        data = json.loads(m.group(0))
+                        if data.get("found") and data.get("price_usd"):
+                            val_usd = float(data["price_usd"])
+                            if val_usd > 0:
+                                eur = round(val_usd * 0.92, 2)
+                                return {
+                                    "price_eur": eur,
+                                    "price_usd": val_usd,
+                                    "grade_label": grade_query
+                                }
+    except Exception:
+        pass
+
+    return None
+
+async def fetch_live_pricecharting_direct(card_name: str, card_number: str, grade_str: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Directe scraper fallback voor PriceCharting."""
+    clean_num = clean_card_number(card_number)
     search_queries = [
         f"{card_name} {clean_num}".strip(),
         f"pokemon {card_name} {clean_num}".strip()
@@ -73,14 +138,12 @@ async def fetch_live_pricecharting_price(card_name: str, card_number: str, grade
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,nl;q=0.8",
-        "Cache-Control": "no-cache"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
     }
 
     def to_float(txt: str) -> Optional[float]:
         if not txt: return None
-        # Negeer tekst en behoud alleen cijfers en decimalen
         clean = re.sub(r"[^\d\.]", "", txt.replace(",", ""))
         try:
             val = float(clean)
@@ -89,9 +152,6 @@ async def fetch_live_pricecharting_price(card_name: str, card_number: str, grade
             return None
 
     g_raw = (grade_str or "9").lower().replace("psa", "").replace("cgc", "").replace("bgs", "").strip()
-
-    # PriceCharting gebruikt video-game kolomnamen voor TCG kaarten:
-    # graded_price = Grade 9 | manual_only_price = PSA 10 | box_only_price = Grade 9.5 | new_price = Grade 8
     target_grade = "9"
     if "10" in g_raw: target_grade = "10"
     elif "9.5" in g_raw: target_grade = "9.5"
@@ -99,15 +159,14 @@ async def fetch_live_pricecharting_price(card_name: str, card_number: str, grade
     elif "7" in g_raw: target_grade = "7"
 
     grade_col_map = {
-        "10": ["manual_only_price", "manual_only", "psa10_price"],
+        "10": ["manual_only_price", "manual_only"],
         "9.5": ["box_only_price", "box_only"],
-        "9": ["graded_price", "graded", "grade9_price"],
-        "8": ["new_price", "new", "grade8_price"],
-        "7": ["cib_price", "complete_price", "grade7_price"],
-        "ungraded": ["loose_price", "used_price", "ungraded_price"]
+        "9": ["graded_price", "graded"],
+        "8": ["new_price", "new"],
+        "7": ["cib_price", "complete_price"]
     }
 
-    async with httpx.AsyncClient(timeout=6.5, follow_redirects=True, headers=headers) as client:
+    async with httpx.AsyncClient(timeout=4.0, follow_redirects=True, headers=headers) as client:
         for q in search_queries:
             search_url = f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(q)}&type=prices"
             try:
@@ -115,35 +174,7 @@ async def fetch_live_pricecharting_price(card_name: str, card_number: str, grade
                 if resp.status_code != 200:
                     continue
 
-                target_html = resp.text
-                final_url = str(resp.url)
-                soup = BeautifulSoup(target_html, "html.parser")
-
-                # Indien we op een zoekresultaten-overzichtspagina zijn beland, navigeer naar het eerste product
-                if "search-products" in final_url:
-                    # Check eerst of de prijs al in de zoekresultatentabel staat
-                    for col_id in grade_col_map.get(target_grade, []):
-                        cell = soup.select_one(f"td.{col_id}, td#{col_id}")
-                        if cell:
-                            found = to_float(cell.get_text())
-                            if found:
-                                eur = round(found * 0.92, 2)
-                                return {
-                                    "price_eur": eur,
-                                    "price_usd": found,
-                                    "url": final_url,
-                                    "grade_label": f"Grade {target_grade}"
-                                }
-
-                    product_link = soup.select_one("td.title a") or soup.select_one("a[href*='/game/pokemon']")
-                    if product_link and product_link.get("href"):
-                        final_url = urllib.parse.urljoin("https://www.pricecharting.com", product_link["href"])
-                        p_resp = await client.get(final_url)
-                        if p_resp.status_code == 200:
-                            target_html = p_resp.text
-                            soup = BeautifulSoup(target_html, "html.parser")
-
-                # 1. Zoek op de officiële PriceCharting tabel ID's
+                soup = BeautifulSoup(resp.text, "html.parser")
                 for col_id in grade_col_map.get(target_grade, []):
                     elem = soup.find(id=col_id) or soup.select_one(f".{col_id}")
                     if elem:
@@ -153,26 +184,8 @@ async def fetch_live_pricecharting_price(card_name: str, card_number: str, grade
                             return {
                                 "price_eur": eur,
                                 "price_usd": val,
-                                "url": final_url,
                                 "grade_label": f"Grade {target_grade}"
                             }
-
-                # 2. Zoek direct op tabelrijen waar de labeltekst (bijv. 'Grade 9' of 'PSA 10') in staat
-                for row in soup.select("table#price_data tr, tr"):
-                    row_text = row.get_text(separator=" ").strip().lower()
-                    if f"grade {target_grade}" in row_text or (target_grade == "10" and "psa 10" in row_text):
-                        price_matches = re.findall(r"\$\s*([0-9\.,]+)", row.get_text())
-                        for p_str in price_matches:
-                            val = to_float(p_str)
-                            if val:
-                                eur = round(val * 0.92, 2)
-                                return {
-                                    "price_eur": eur,
-                                    "price_usd": val,
-                                    "url": final_url,
-                                    "grade_label": f"Grade {target_grade}"
-                                }
-
             except Exception:
                 continue
 
@@ -222,9 +235,11 @@ async def resolve_card_price(
     ai_estimate: float,
     is_graded: bool = False,
     grading_company: Optional[str] = None,
-    grade: Optional[str] = None
+    grade: Optional[str] = None,
+    set_name: Optional[str] = None,
+    api_key: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Prijsresolutie: Live PriceCharting voor slabs, eBay voor Chinees, Cardmarket NL voor raw singles."""
+    """Prijsresolutie met realtime Google Grounding voor PriceCharting."""
     clean_num = clean_card_number(card_number)
     slab_id = f"{grading_company}_{grade}".lower() if is_graded else "raw"
     cache_key = f"{card_name.lower()}_{clean_num}_{language_code}_{slab_id}".strip()
@@ -233,32 +248,57 @@ async def resolve_card_price(
     if cache_key in PRICE_CACHE and (now - PRICE_CACHE[cache_key]["time"] < CACHE_TTL):
         return PRICE_CACHE[cache_key]["data"]
 
-    # 1. Gecertificeerde Graded Slabs: LIVE PriceCharting scraper
+    # 1. Gecertificeerde Graded Slabs
     if is_graded:
-        pc_live = await fetch_live_pricecharting_price(card_name, card_number, grade)
         default_pc_url = get_pricecharting_search_url(card_name, card_number)
         label = f"{grading_company or 'Slab'} {grade or ''}".strip()
 
-        if pc_live and pc_live.get("price_eur"):
-            real_price = pc_live["price_eur"]
-            usd_val = pc_live.get('price_usd', 0.0)
+        # A. Zoek eerst via Google Search Grounding (omzeilt Cloudflare)
+        if api_key:
+            grounded = await fetch_live_pricecharting_via_grounding(
+                card_name=card_name,
+                card_number=card_number,
+                set_name=set_name,
+                grading_company=grading_company,
+                grade=grade,
+                api_key=api_key
+            )
+            if grounded and grounded.get("price_eur"):
+                real_price = grounded["price_eur"]
+                usd_val = grounded.get("price_usd", 0.0)
+                data = {
+                    "price_eur": real_price,
+                    "url": default_pc_url,
+                    "source": f"PriceCharting Live (${usd_val:.2f})",
+                    "is_graded": True,
+                    "is_chinese": False
+                }
+                PRICE_CACHE[cache_key] = {"time": now, "data": data}
+                return data
+
+        # B. Directe scraping fallback
+        pc_direct = await fetch_live_pricecharting_direct(card_name, card_number, grade)
+        if pc_direct and pc_direct.get("price_eur"):
+            real_price = pc_direct["price_eur"]
+            usd_val = pc_direct.get("price_usd", 0.0)
             data = {
                 "price_eur": real_price,
-                "url": pc_live.get("url") or default_pc_url,
+                "url": default_pc_url,
                 "source": f"PriceCharting Live (${usd_val:.2f})",
                 "is_graded": True,
                 "is_chinese": False
             }
-        else:
-            # Fallback als PriceCharting tijdelijk niet bereikbaar is
-            data = {
-                "price_eur": round(max(ai_estimate, 12.0), 2),
-                "url": default_pc_url,
-                "source": f"Geschat ({label})",
-                "is_graded": True,
-                "is_chinese": False
-            }
+            PRICE_CACHE[cache_key] = {"time": now, "data": data}
+            return data
 
+        # C. Nood-fallback
+        data = {
+            "price_eur": round(max(ai_estimate, 12.0), 2),
+            "url": default_pc_url,
+            "source": f"Geschat ({label})",
+            "is_graded": True,
+            "is_chinese": False
+        }
         PRICE_CACHE[cache_key] = {"time": now, "data": data}
         return data
 
@@ -315,7 +355,7 @@ async def resolve_card_price(
 
 @app.get("/")
 def ping():
-    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.8.0"}
+    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "7.0.0"}
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
@@ -336,9 +376,7 @@ Analyseer deze Pokémon kaartfoto direct:
    - gradingCompany: "PSA", "BGS", "CGC" of null
    - grade: bijv. "10", "9.5", "9", "8" of null
 8. Conditie: Indien graded geef de volledige omschrijving (bijv. "PSA 9 Mint"). Indien raw, kies uit: "Near Mint (NM)", "Light Played (LP)", "Good (GD)".
-9. Reële marktwaarde in euro:
-   - Indien RAW: schat de Nederlandse Cardmarket marktwaarde.
-   - Indien GRADED SLAB: schat de werkelijke PriceCharting veilingwaarde specifiek voor deze grade.
+9. Reële marktwaarde in euro: geschat bedrag.
 
 JSON Formaat:
 [
@@ -434,7 +472,9 @@ JSON Formaat:
             ai_estimate=base_estimate,
             is_graded=is_graded,
             grading_company=c.get("gradingCompany"),
-            grade=c.get("grade")
+            grade=c.get("grade"),
+            set_name=c.get("setName"),
+            api_key=key
         )
 
         final_price = price_info["price_eur"]
