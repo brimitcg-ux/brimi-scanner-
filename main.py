@@ -7,29 +7,30 @@ from typing import Optional, List, Dict, Any
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 app = FastAPI(
     title="BRIMI Cardmarket & AI Vision Engine",
     description="Centrale backend voor automatische kaartdetectie via AI en live Cardmarket NL prijzen.",
-    version="2.0.0"
+    version="2.1.0"
 )
 
-# CORS openstellen zodat de web-app altijd direct kan communiceren
+# CORS geoptimaliseerd voor WebKit / Safari op iOS:
+# allow_credentials=False voorkomt dat Safari de connectie weigert bij een wildcard origin (*)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
 # API sleutel ophalen uit de veilige Render omgeving
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
-# Geheugencache om Cardmarket te ontlasten
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL = timedelta(minutes=15)
 
@@ -78,7 +79,7 @@ class ScanRequest(BaseModel):
 def clean_number(card_number: str) -> str:
     if not card_number:
         return ""
-    main_num = card_number.split("/")[0].strip()
+    main_num = str(card_number).split("/")[0].strip()
     return re.sub(r"^0+", "", main_num) or "0"
 
 def parse_price(text: str) -> float:
@@ -158,7 +159,7 @@ def extract_nl_seller_offers(soup: BeautifulSoup) -> List[OfferItem]:
     return offers
 
 async def fetch_cardmarket_data(card_name: str, card_number: str, language: str = "EN", condition: str = "NM") -> PriceResponse:
-    cache_key = f"{card_name.lower()}_{card_number}_{language}_{condition}"
+    cache_key = f"{str(card_name).lower()}_{card_number}_{language}_{condition}"
     now = datetime.now()
     if cache_key in PRICE_CACHE and (now - PRICE_CACHE[cache_key]["time"] < CACHE_TTL):
         return PRICE_CACHE[cache_key]["data"]
@@ -166,7 +167,7 @@ async def fetch_cardmarket_data(card_name: str, card_number: str, language: str 
     clean_num = clean_number(card_number)
     search_query = f"{card_name} {clean_num}".strip()
     search_url = f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(search_query)}&sellerCountry=17&minCondition=2"
-    if language.upper() == "EN":
+    if str(language).upper() == "EN":
         search_url += "&idLanguage=1"
 
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=12.0, follow_redirects=True) as client:
@@ -195,7 +196,7 @@ async def fetch_cardmarket_data(card_name: str, card_number: str, language: str 
 
             res = PriceResponse(
                 card_name=card_name,
-                card_number=card_number,
+                card_number=str(card_number),
                 product_url=product_url,
                 lowest_nl_price_eur=round(lowest_nl, 2),
                 price_trend_eur=round(trend, 2),
@@ -211,7 +212,7 @@ async def fetch_cardmarket_data(card_name: str, card_number: str, language: str 
         except Exception:
             return PriceResponse(
                 card_name=card_name,
-                card_number=card_number,
+                card_number=str(card_number),
                 product_url=search_url,
                 lowest_nl_price_eur=2.50,
                 price_trend_eur=2.20,
@@ -238,12 +239,12 @@ async def scan_cards(payload: ScanRequest):
     if not key:
         raise HTTPException(
             status_code=500, 
-            detail="GEMINI_API_KEY is nog niet ingesteld in de Render Environment Variables."
+            detail="GEMINI_API_KEY is nog niet ingesteld in Render Environment Variables."
         )
 
     prompt_text = """
 Je bent een Pokémon TCG expert en taxateur. Bekijk de afbeelding zeer nauwkeurig.
-Er kunnen 1, 2 of meer kaarten op de foto liggen (los, in sleeves of toploaders).
+Er kunnen 1, 2 of meer kaarten op de foto liggen (los, op tafel, in sleeves of toploaders).
 
 Identificeer voor IEDERE afzonderlijke Pokémon kaart op de foto:
 1. "cardName": Exacte officiële kaartnaam (bijv. "Pikachu & Zekrom GX", "Palkia LV.X").
@@ -257,10 +258,9 @@ Identificeer voor IEDERE afzonderlijke Pokémon kaart op de foto:
 9. "condition": "Near Mint (NM)", "Lightly Played (LP)" of "Played (PL)".
 10. "conditionReason": Korte beschrijving van de visuele staat op de foto.
 
-Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde kaart. Geen markdown quotes, direct geldige JSON array.
+Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde kaart.
 """
 
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
     gemini_body = {
         "contents": [
             {
@@ -281,30 +281,58 @@ Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde
         }
     }
 
-    async with httpx.AsyncClient(timeout=25.0) as client:
-        res = await client.post(gemini_url, json=gemini_body)
-        if res.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"Google Vision fout: {res.text}")
+    # Probeer eerst gemini-1.5-flash, fallback naar gemini-2.0-flash
+    models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+    raw_text = None
+    last_error = ""
 
-        res_json = res.json()
-        raw_text = res_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "[]")
-        
-        try:
-            detected_cards = json.loads(raw_text)
-            if not isinstance(detected_cards, list):
-                detected_cards = [detected_cards]
-        except Exception:
-            raise HTTPException(status_code=500, detail="Kon de AI respons niet omzetten naar JSON.")
+    async with httpx.AsyncClient(timeout=35.0) as client:
+        for model_name in models_to_try:
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+            try:
+                res = await client.post(gemini_url, json=gemini_body)
+                if res.status_code == 200:
+                    res_json = res.json()
+                    candidates = res_json.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            raw_text = parts[0].get("text", "")
+                            if raw_text:
+                                break
+                else:
+                    last_error = f"{model_name}: status {res.status_code} - {res.text[:200]}"
+            except Exception as e:
+                last_error = str(e)
+
+    if not raw_text:
+        raise HTTPException(status_code=502, detail=f"Google AI Vision kon niet worden geraadpleegd: {last_error}")
+
+    try:
+        clean_json_str = raw_text.strip()
+        if clean_json_str.startswith("```json"):
+            clean_json_str = clean_json_str[7:]
+        if clean_json_str.startswith("```"):
+            clean_json_str = clean_json_str[3:]
+        if clean_json_str.endswith("```"):
+            clean_json_str = clean_json_str[:-3]
+        clean_json_str = clean_json_str.strip()
+
+        detected_cards = json.loads(clean_json_str)
+        if not isinstance(detected_cards, list):
+            detected_cards = [detected_cards]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Kon kaartgegevens niet ontleden: {str(e)}")
 
     if not detected_cards:
-        raise HTTPException(status_code=404, detail="Geen kaarten gedetecteerd op de afbeelding.")
+        raise HTTPException(status_code=404, detail="Geen kaarten herkend op de foto. Zorg voor voldoende licht.")
 
     # Voor elke herkende kaart live Cardmarket NL gegevens ophalen
     results = []
     for card in detected_cards:
         cm_data = await fetch_cardmarket_data(
             card_name=card.get("cardName", "Pokémon Kaart"),
-            card_number=card.get("cardNumber", ""),
+            card_number=str(card.get("cardNumber", "")),
             language=card.get("languageCode", "EN"),
             condition="NM" if "Near" in card.get("condition", "NM") else "LP"
         )
