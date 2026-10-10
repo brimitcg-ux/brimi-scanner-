@@ -46,7 +46,6 @@
             min-height: 100vh;
         }
 
-        /* Hoogwaardig Nightblue Glaspaneel */
         .glass-panel {
             background: linear-gradient(180deg, rgba(11, 27, 54, 0.75) 0%, rgba(6, 16, 34, 0.85) 100%);
             backdrop-filter: blur(28px);
@@ -59,7 +58,6 @@
             box-shadow: 0 0 24px rgba(56, 189, 248, 0.15);
         }
 
-        /* Scherpe Viewfinder Corners */
         .vf-corner {
             position: absolute;
             width: 20px;
@@ -78,7 +76,6 @@
         .group:hover .vf-bl { bottom: 10px; left: 10px; border-color: #ffffff; }
         .group:hover .vf-br { bottom: 10px; right: 10px; border-color: #ffffff; }
 
-        /* Snelle laser scanning animatie */
         @keyframes laser-sweep {
             0% { top: 5%; opacity: 0.3; }
             50% { top: 92%; opacity: 1; }
@@ -94,7 +91,6 @@
             animation: laser-sweep 1.7s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
 
-        /* BRIMI Pokéball dot */
         .brimi-dot {
             display: inline-block;
             position: relative;
@@ -136,10 +132,8 @@
     <header class="border-b border-night-border/40 bg-night-base/80 backdrop-blur-2xl sticky top-0 z-40">
         <div class="max-w-2xl mx-auto px-4 py-3.5 flex justify-between items-center">
             
-            <!-- BRIMI Merklogo -->
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl border border-night-border bg-night-deep flex items-center justify-center text-white shadow-inner">
-                    <!-- TCG Trading Cards Icoon -->
                     <svg class="w-5 h-5 text-night-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="2.5" y="5.5" width="12" height="16" rx="2" transform="rotate(-8 8.5 13.5)" stroke-opacity="0.45" />
                         <rect x="8" y="3" width="13" height="17" rx="2" fill="rgba(116, 138, 168, 0.12)" />
@@ -158,7 +152,6 @@
                 </div>
             </div>
 
-            <!-- Live NL Indicator badge -->
             <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-night-deep border border-night-border text-xs shadow-inner">
                 <span class="relative flex h-2 w-2">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -173,7 +166,6 @@
     <!-- HOOFD VIEWPORT -->
     <main class="max-w-2xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-6">
 
-        <!-- Titel & Subtitel -->
         <div class="text-center space-y-1">
             <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
                 Scan je kaart. Check de NL prijs.
@@ -183,29 +175,28 @@
             </p>
         </div>
 
-        <!-- DE VIEWFINDER (DE SCANNER) -->
+        <!-- DE VIEWFINDER (MET DIRECTE CAMERA TRIGGER) -->
         <div class="w-full">
             <label for="file-input" id="drop-zone" class="glass-panel relative block rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 group border border-night-border/60 hover:border-night-slate/60 active:scale-[0.99] glow-accent">
-                <input type="file" id="file-input" class="hidden" accept="image/*">
+                <!-- capture="environment" opent direct de camera op iPhone/Android -->
+                <input type="file" id="file-input" class="hidden" accept="image/*" capture="environment">
                 
-                <!-- Viewfinder Hoekjes -->
                 <div class="vf-corner vf-tl"></div>
                 <div class="vf-corner vf-tr"></div>
                 <div class="vf-corner vf-bl"></div>
                 <div class="vf-corner vf-br"></div>
 
-                <!-- Viewfinder Call-to-Action -->
                 <div id="drop-content" class="flex flex-col items-center justify-center space-y-4 pointer-events-none py-4">
                     <div class="w-16 h-16 rounded-2xl bg-night-deep border border-night-border flex items-center justify-center text-white text-2xl group-hover:scale-105 group-hover:border-white transition-all duration-300 shadow-xl">
-                        <i class="fa-solid fa-expand text-night-light group-hover:text-white transition-colors"></i>
+                        <i class="fa-solid fa-camera text-night-light group-hover:text-white transition-colors"></i>
                     </div>
 
                     <div class="space-y-1">
                         <p class="text-base font-extrabold text-white">
-                            Maak een foto of kies uit bibliotheek
+                            Maak direct een foto of upload
                         </p>
                         <p class="text-xs text-night-slate font-medium">
-                            Herkent Pokémonkaarten razendsnel door beschermhoesjes heen
+                            Herkent Pokémonkaarten en graded slabs (PSA/CGC/BGS) direct
                         </p>
                     </div>
 
@@ -215,7 +206,6 @@
                     </span>
                 </div>
 
-                <!-- Foto Preview & Laserlijn -->
                 <div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[350px] bg-black/70 flex items-center justify-center border border-night-border">
                     <img id="image-display" src="" alt="Gescande Pokémon kaart" class="max-h-[330px] w-auto object-contain rounded-xl">
                     <div id="laser-beam" class="hidden laser-sweep"></div>
@@ -266,8 +256,6 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                
-                <!-- Reden 1: Echte NL Prijzen -->
                 <div class="glass-panel rounded-2xl p-4 space-y-2 border border-night-border/60">
                     <div class="w-8 h-8 rounded-xl bg-night-deep border border-night-border text-white flex items-center justify-center text-xs">
                         <i class="fa-solid fa-flag"></i>
@@ -278,28 +266,25 @@
                     </p>
                 </div>
 
-                <!-- Reden 2: Toploaders & Sleeves -->
                 <div class="glass-panel rounded-2xl p-4 space-y-2 border border-night-border/60">
                     <div class="w-8 h-8 rounded-xl bg-night-deep border border-night-border text-emerald-400 flex items-center justify-center text-xs">
                         <i class="fa-solid fa-shield-halved"></i>
                     </div>
-                    <h4 class="text-xs font-black text-white">Werkt Door Toploaders</h4>
+                    <h4 class="text-xs font-black text-white">Sleeves & Graded Slabs</h4>
                     <p class="text-[11px] text-slate-300 leading-relaxed">
-                        Haal je kaart nooit uit de sleeve. De scanner herkent de kaart en conditie gewoon door het plastic heen.
+                        Werkt door toploaders heen en herkent automatisch PSA-, CGC- en Beckett-labels met grading.
                     </p>
                 </div>
 
-                <!-- Reden 3: Eén Tik Community Aanbod -->
                 <div class="glass-panel rounded-2xl p-4 space-y-2 border border-night-border/60">
                     <div class="w-8 h-8 rounded-xl bg-night-deep border border-night-border text-emerald-400 flex items-center justify-center text-xs">
                         <i class="fa-brands fa-whatsapp text-sm"></i>
                     </div>
                     <h4 class="text-xs font-black text-white">1-Tik Community Aanbod</h4>
                     <p class="text-[11px] text-slate-300 leading-relaxed">
-                        Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief vraagprijs, conditie en Cardmarket link.
+                        Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief vraagprijs, conditie en link.
                     </p>
                 </div>
-
             </div>
         </div>
 
@@ -347,6 +332,12 @@
 
     <script>
         const BACKEND_URL = "https://brimi-scanner.onrender.com";
+
+        // PIJLER 1: STILLE VOORVERWARMING (PRE-WARM PING)
+        // Zodra iemand de app opent, maken we Render alvast wakker
+        window.addEventListener('DOMContentLoaded', () => {
+            fetch(`${BACKEND_URL}/`).catch(() => {});
+        });
 
         const fileInput = document.getElementById('file-input');
         const dropContent = document.getElementById('drop-content');
@@ -403,7 +394,7 @@
         }
         notifyClose.addEventListener('click', () => notifyModal.classList.add('hidden'));
 
-        // COMPRESSIE VOOR DIRECTE UPLOAD
+        // PIJLER 2: SNELHEID & FLOW (WebP/Canvas compressie)
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
                 const file = e.target.files[0];
@@ -458,7 +449,7 @@
             cardsContainer.innerHTML = '';
 
             statusTitle.textContent = "Analyseren...";
-            statusSubtitle.textContent = "Leest setnummer & checkt Cardmarket NL prijzen...";
+            statusSubtitle.textContent = "Leest serie, nummer en checkt Cardmarket NL...";
             progressBar.style.width = "40%";
 
             try {
@@ -506,6 +497,43 @@
             return '🌐';
         }
 
+        // PIJLER 3: CONDITIE-KIEZER MET 1 TIK (NM / LP / GD)
+        window.setCardCondition = function(idx, condition) {
+            triggerHaptic();
+            const card = lastScannedCards[idx];
+            if (!card) return;
+
+            card.condition = condition;
+            const baseNM = card.basePriceNM || card.estimatedPriceEUR || 3.00;
+
+            if (condition.includes('Near Mint')) {
+                card.estimatedPriceEUR = baseNM;
+            } else if (condition.includes('Light Played')) {
+                card.estimatedPriceEUR = Math.max(1.0, roundPrice(baseNM * 0.82));
+            } else if (condition.includes('Good')) {
+                card.estimatedPriceEUR = Math.max(0.75, roundPrice(baseNM * 0.65));
+            }
+
+            const priceTag = document.getElementById(`price-tag-${idx}`);
+            if (priceTag) priceTag.textContent = `€ ${card.estimatedPriceEUR.toFixed(2)}`;
+
+            ['NM', 'LP', 'GD'].forEach(c => {
+                const btn = document.getElementById(`cond-btn-${idx}-${c}`);
+                if (!btn) return;
+                if ((c === 'NM' && condition.includes('Near Mint')) ||
+                    (c === 'LP' && condition.includes('Light Played')) ||
+                    (c === 'GD' && condition.includes('Good'))) {
+                    btn.className = "flex-1 py-1.5 rounded-lg text-[10px] font-black bg-white text-night-base border border-white transition shadow";
+                } else {
+                    btn.className = "flex-1 py-1.5 rounded-lg text-[10px] font-bold bg-night-deep text-slate-300 border border-night-border hover:bg-night-surface transition";
+                }
+            });
+        };
+
+        function roundPrice(val) {
+            return Math.round(val * 20) / 20; // Afronden op 0.05
+        }
+
         function renderResults(cards) {
             resultsPanel.classList.remove('hidden');
             cardsContainer.innerHTML = '';
@@ -524,6 +552,7 @@
                 const flag = getFlag(card.languageCode);
                 const isChinese = card.isChinese || (card.languageCode === 'CN');
                 const marketText = isChinese ? "Check eBay Sold" : "Check Cardmarket NL";
+                const isSlab = card.isGraded || Boolean(card.gradingCompany);
 
                 const cardBox = document.createElement('div');
                 cardBox.className = "glass-panel rounded-3xl p-5 sm:p-6 space-y-4 border border-night-border/80 shadow-2xl";
@@ -539,6 +568,12 @@
                                     <span>${flag}</span>
                                     <span>${card.language || 'Engels'}</span>
                                 </span>
+                                ${isSlab ? `
+                                    <span class="bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2.5 py-0.5 rounded-lg font-black flex items-center gap-1">
+                                        <i class="fa-solid fa-gem text-[10px]"></i>
+                                        <span>${card.gradingCompany || 'SLAB'} ${card.grade || ''}</span>
+                                    </span>
+                                ` : ''}
                             </div>
                             <h2 class="text-xl font-black text-white tracking-tight">${card.cardName}</h2>
                             <p class="text-xs text-night-slate font-medium">${card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
@@ -554,12 +589,36 @@
                         </div>
                     </div>
 
-                    <div class="bg-night-deep/90 rounded-2xl p-3 border border-night-border flex items-center justify-between text-xs">
-                        <span class="text-slate-300 font-medium">Staat van de kaart:</span>
-                        <span class="font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-                            ${card.condition || 'Near Mint (NM)'}
+                    <!-- PIJLER 3: COMPACTE CONDITIE-SELECTOR -->
+                    ${!isSlab ? `
+                    <div class="bg-night-deep/80 rounded-2xl p-3 border border-night-border space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-slate-300 font-bold">Kies Conditie:</span>
+                            <span class="text-[10px] text-night-slate font-medium">Past vraagprijs direct aan</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" id="cond-btn-${idx}-NM" onclick="setCardCondition(${idx}, 'Near Mint (NM)')" 
+                                    class="flex-1 py-1.5 rounded-lg text-[10px] font-black ${(!card.condition || card.condition.includes('Near Mint')) ? 'bg-white text-night-base border border-white' : 'bg-night-deep text-slate-300 border border-night-border'} transition shadow">
+                                NM
+                            </button>
+                            <button type="button" id="cond-btn-${idx}-LP" onclick="setCardCondition(${idx}, 'Light Played (LP)')" 
+                                    class="flex-1 py-1.5 rounded-lg text-[10px] font-bold ${(card.condition && card.condition.includes('Light Played')) ? 'bg-white text-night-base border border-white' : 'bg-night-deep text-slate-300 border border-night-border'} transition">
+                                LP (-15%)
+                            </button>
+                            <button type="button" id="cond-btn-${idx}-GD" onclick="setCardCondition(${idx}, 'Good (GD)')" 
+                                    class="flex-1 py-1.5 rounded-lg text-[10px] font-bold ${(card.condition && card.condition.includes('Good')) ? 'bg-white text-night-base border border-white' : 'bg-night-deep text-slate-300 border border-night-border'} transition">
+                                GD (-35%)
+                            </button>
+                        </div>
+                    </div>
+                    ` : `
+                    <div class="bg-night-deep/80 rounded-2xl p-3 border border-night-border flex items-center justify-between text-xs">
+                        <span class="text-slate-300 font-bold">Gecertificeerde Slab:</span>
+                        <span class="font-black px-2.5 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/30">
+                            ${card.gradingCompany || 'SLAB'} ${card.grade || 'Graded'}
                         </span>
                     </div>
+                    `}
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <a href="${card.directCardmarketUrl}" target="_blank" rel="noopener noreferrer" 
@@ -602,7 +661,7 @@
             }
         });
 
-        // HIER WORDT HET COMMUNITY AANBOD BERICHT GEGENEREERD (1 KAART - EXACT VOLGENS JOUW TEMPLATE)
+        // EXACT JOUW GEVRAAGDE COMMUNITY FORMAT
         window.shareCardToWhatsApp = function(idx) {
             const c = lastScannedCards[idx];
             if (!c) return;
@@ -611,16 +670,20 @@
             const flag = getFlag(c.languageCode);
             const price = (typeof c.estimatedPriceEUR === 'number' ? c.estimatedPriceEUR : 3.00).toFixed(2);
             
-            // Reeks-/kaartnummer netjes samenvoegen
             const numPart = [c.setCode, c.cardNumber ? (c.setTotal ? `${c.cardNumber}/${c.setTotal}` : c.cardNumber) : ''].filter(Boolean).join(' ');
             const cardIdentifier = numPart ? `${c.cardName} (${numPart})` : c.cardName;
+
+            let conditionStr = c.condition || 'Near Mint (NM)';
+            if (c.isGraded && c.grade) {
+                conditionStr = `${c.gradingCompany || 'PSA'} ${c.grade} Graded`;
+            }
 
             let text = `Hey community! 👋\n\n`;
             text += `Hierbij bied ik mijn kaart aan:\n\n`;
             text += `🃏 ${cardIdentifier}\n`;
             text += `📍 Serie: ${c.setName || 'Pokémon'}\n`;
             text += `🌐 Taal: ${flag} ${c.language || 'Engels'}\n`;
-            text += `✨ Conditie: ${c.condition || 'Near Mint (NM)'}\n`;
+            text += `✨ Conditie: ${conditionStr}\n`;
             text += `💶 Prijs: € ${price}\n`;
             if (c.directCardmarketUrl) {
                 text += `🔗 Cardmarket link: ${c.directCardmarketUrl}\n`;
@@ -630,7 +693,6 @@
             window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
         };
 
-        // HIER WORDT HET COMMUNITY AANBOD BERICHT GEGENEREERD (MEERDERE KAARTEN)
         btnShareAll.addEventListener('click', () => {
             if (!lastScannedCards || lastScannedCards.length === 0) return;
             triggerHaptic();
@@ -644,10 +706,15 @@
                 const numPart = [c.setCode, c.cardNumber ? (c.setTotal ? `${c.cardNumber}/${c.setTotal}` : c.cardNumber) : ''].filter(Boolean).join(' ');
                 const cardIdentifier = numPart ? `${c.cardName} (${numPart})` : c.cardName;
 
+                let conditionStr = c.condition || 'Near Mint (NM)';
+                if (c.isGraded && c.grade) {
+                    conditionStr = `${c.gradingCompany || 'PSA'} ${c.grade} Graded`;
+                }
+
                 text += `${index + 1}️⃣ ${cardIdentifier}\n`;
                 text += `   📍 Serie: ${c.setName || 'Pokémon'}\n`;
                 text += `   🌐 Taal: ${flag} ${c.language || 'Engels'}\n`;
-                text += `   ✨ Conditie: ${c.condition || 'Near Mint (NM)'}\n`;
+                text += `   ✨ Conditie: ${conditionStr}\n`;
                 text += `   💶 Prijs: € ${price}\n`;
                 if (c.directCardmarketUrl) {
                     text += `   🔗 Cardmarket link: ${c.directCardmarketUrl}\n`;
