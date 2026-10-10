@@ -1,734 +1,578 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cardmarket Scanner powered by BRIMI</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { 
-                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-                        mono: ['"JetBrains Mono"', 'monospace']
-                    },
-                    colors: {
-                        brimiNavy: '#041633',
-                        brimiCard: '#0d1829',
-                        brimiBorder: 'rgba(148, 163, 184, 0.18)',
-                        brandBlue: '#2563eb',
-                        brandAccent: '#38bdf8'
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body { 
-            background: radial-gradient(circle at 50% 0%, #0f2347 0%, #060d1a 50%, #030710 100%);
-            color: #f8fafc;
-            min-height: 100vh;
-        }
-        .card-glow {
-            background: rgba(13, 24, 41, 0.85);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(148, 163, 184, 0.14);
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-        }
-        .card-glow:hover {
-            border-color: rgba(56, 189, 248, 0.35);
-            box-shadow: 0 14px 40px -10px rgba(37, 99, 235, 0.2);
-        }
-        .drag-active {
-            border-color: #38bdf8 !important;
-            background-color: rgba(37, 99, 235, 0.12) !important;
-            transform: scale(1.01);
-        }
-        @keyframes subtle-shimmer {
-            0% { transform: translateY(-100%); }
-            100% { transform: translateY(100%); }
-        }
-        .shimmer-line {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #38bdf8, #818cf8, transparent);
-            animation: subtle-shimmer 2.4s ease-in-out infinite alternate;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cardmarket Scanner powered by BRIMI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script>
+tailwind.config = {
+theme: {
+extend: {
+fontFamily: {
+sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+mono: ['"JetBrains Mono"', 'monospace']
+},
+colors: {
+brimiNavy: '#041633',
+brimiCard: '#0d1829',
+brimiBorder: 'rgba(148, 163, 184, 0.18)',
+brandBlue: '#2563eb',
+brandAccent: '#38bdf8'
+}
+}
+}
+}
+</script>
+<style>
+body {
+background: radial-gradient(circle at 50% 0%, #0f2347 0%, #060d1a 50%, #030710 100%);
+color: #f8fafc;
+min-height: 100vh;
+}
+.card-glow {
+background: rgba(13, 24, 41, 0.85);
+backdrop-filter: blur(16px);
+border: 1px solid rgba(148, 163, 184, 0.14);
+box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+.card-glow:hover {
+border-color: rgba(56, 189, 248, 0.35);
+box-shadow: 0 14px 40px -10px rgba(37, 99, 235, 0.2);
+}
+.drag-active {
+border-color: #38bdf8 !important;
+background-color: rgba(37, 99, 235, 0.12) !important;
+transform: scale(1.01);
+}
+@keyframes subtle-shimmer {
+0% { transform: translateY(-100%); }
+100% { transform: translateY(100%); }
+}
+.shimmer-line {
+position: absolute;
+top: 0;
+left: 0;
+right: 0;
+height: 2px;
+background: linear-gradient(90deg, transparent, #38bdf8, #818cf8, transparent);
+animation: subtle-shimmer 2.4s ease-in-out infinite alternate;
+}
+</style>
 </head>
 <body class="font-sans antialiased flex flex-col justify-between selection:bg-sky-500 selection:text-white">
-
-    <!-- Header -->
-    <header class="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md sticky top-0 z-40">
-        <div class="max-w-5xl mx-auto px-4 py-3.5 flex justify-between items-center">
-            
-            <!-- Brand -->
-            <div class="flex flex-col">
-                <span class="text-base sm:text-lg font-black tracking-tight text-white uppercase flex items-center gap-2">
-                    Cardmarket Scanner
-                </span>
-                <span class="text-[11px] font-semibold text-slate-400">
-                    powered by <span class="text-sky-400 font-bold tracking-wider">BRIMI</span>
-                </span>
-            </div>
-
-            <!-- NL Markt Badge -->
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs shadow-inner">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span class="text-slate-300 font-medium hidden sm:inline">Prijzen van</span>
-                <span class="font-bold text-white flex items-center gap-1">
-                    <span>🇳🇱</span> Nederlandse verkopers
-                </span>
-            </div>
-        </div>
-    </header>
-
-    <main class="max-w-5xl mx-auto w-full px-4 py-8 sm:py-12 flex-grow flex flex-col gap-10">
-
-        <!-- Introductie -->
-        <div class="text-center max-w-2xl mx-auto space-y-3">
-            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-950/70 border border-sky-800/60 text-xs font-semibold text-sky-300">
-                <i class="fa-solid fa-bolt text-sky-400"></i>
-                <span>Nooit meer handmatig typen of zoeken op Cardmarket</span>
-            </div>
-            <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
-                Upload een foto. Zie direct wat je kaarten waard zijn.
-            </h1>
-            <p class="text-sm sm:text-base text-slate-400 leading-relaxed max-w-lg mx-auto">
-                Stop met het handmatig intikken van moeilijke setcodes of kaartnummers. Sleep je foto hieronder en zie meteen de actuele prijzen in Nederland.
-            </p>
-        </div>
-
-        <!-- 3 Voordelen Banners -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 max-w-3xl mx-auto w-full">
-            <div class="card-glow rounded-xl p-3.5 flex items-center gap-3">
-                <div class="w-9 h-9 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-camera"></i>
-                </div>
-                <div class="text-left">
-                    <p class="text-xs font-bold text-white">1 of meerdere kaarten</p>
-                    <p class="text-[11px] text-slate-400">Los, op tafel of een binderpagina</p>
-                </div>
-            </div>
-
-            <div class="card-glow rounded-xl p-3.5 flex items-center gap-3">
-                <div class="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-tag"></i>
-                </div>
-                <div class="text-left">
-                    <p class="text-xs font-bold text-white">Eerlijke NL Prijzen</p>
-                    <p class="text-[11px] text-slate-400">Gefilterd op actueel Nederlands aanbod</p>
-                </div>
-            </div>
-
-            <div class="card-glow rounded-xl p-3.5 flex items-center gap-3">
-                <div class="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
-                    <i class="fa-solid fa-shield-halved"></i>
-                </div>
-                <div class="text-left">
-                    <p class="text-xs font-bold text-white">Staat & Taal</p>
-                    <p class="text-[11px] text-slate-400">Prijzen die passen bij jouw conditie</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Upload Drag & Drop Box -->
-        <section id="upload-panel" class="w-full max-w-3xl mx-auto">
-            <div id="drop-zone" class="card-glow border-2 border-dashed border-slate-700/80 hover:border-sky-400 rounded-3xl p-8 sm:p-12 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-xl">
-                <input type="file" id="file-input" class="hidden" accept="image/*">
-                
-                <div id="drop-content" class="flex flex-col items-center justify-center space-y-4">
-                    <div class="w-16 h-16 rounded-2xl bg-gradient-to-b from-sky-500/20 to-blue-600/10 border border-sky-500/30 flex items-center justify-center text-sky-400 text-2xl group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                        <i class="fa-solid fa-cloud-arrow-up"></i>
-                    </div>
-
-                    <div class="space-y-1">
-                        <p class="text-base sm:text-lg font-bold text-white group-hover:text-sky-300 transition-colors">
-                            Kies een foto of sleep hem hierheen
-                        </p>
-                        <p class="text-xs text-slate-400 max-w-sm mx-auto">
-                            Werkt met losse kaarten, toploaders, sleeves en complete pagina's.
-                        </p>
-                    </div>
-
-                    <div class="pt-1">
-                        <span class="inline-flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 font-semibold px-4 py-2 rounded-xl text-xs border border-slate-700 transition">
-                            <i class="fa-solid fa-folder-open text-sky-400"></i>
-                            Selecteer foto
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Preview container tijdens upload -->
-                <div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[420px] bg-black/60 flex items-center justify-center border border-slate-800">
-                    <img id="image-display" src="" alt="Geüploade kaart" class="max-h-[400px] w-auto object-contain rounded-xl">
-                    <div id="laser-effect" class="hidden shimmer-line"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Status & Voortgang -->
-        <section id="scanning-state" class="hidden w-full max-w-xl mx-auto card-glow rounded-2xl p-6 sm:p-8 border border-sky-500/30 text-center space-y-5 shadow-2xl">
-            <div class="w-12 h-12 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xl mx-auto flex items-center justify-center">
-                <i class="fa-solid fa-spinner fa-spin"></i>
-            </div>
-
-            <div class="space-y-1">
-                <h3 id="status-title" class="text-base font-bold text-white">Kaart opzoeken...</h3>
-                <p id="status-subtitle" class="text-xs text-slate-400">We kijken welke kaart dit is en wat hij waard is...</p>
-            </div>
-
-            <!-- Eenvoudige stappen -->
-            <div class="grid grid-cols-4 gap-2 text-[11px] font-medium text-slate-500 pt-1">
-                <div id="step-1" class="p-2 rounded-lg bg-slate-900 border border-slate-800">1. Kaart</div>
-                <div id="step-2" class="p-2 rounded-lg bg-slate-900 border border-slate-800">2. Nummer</div>
-                <div id="step-3" class="p-2 rounded-lg bg-slate-900 border border-slate-800">3. Staat</div>
-                <div id="step-4" class="p-2 rounded-lg bg-slate-900 border border-slate-800">4. Prijzen</div>
-            </div>
-
-            <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
-                <div id="progress-indicator" class="h-full bg-sky-400 transition-all duration-300 rounded-full" style="width: 25%"></div>
-            </div>
-        </section>
-
-        <!-- Resultaten Overzicht -->
-        <section id="results-panel" class="hidden w-full space-y-6">
-            
-            <!-- Resultaten Samenvatting -->
-            <div class="card-glow rounded-2xl p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-l-sky-400 shadow-xl">
-                <div class="space-y-1">
-                    <div class="flex items-center gap-2">
-                        <h2 class="text-xl sm:text-2xl font-black text-white" id="results-count">1 Kaart Gevonden</h2>
-                        <span class="text-xs bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/20">Cardmarket NL</span>
-                    </div>
-                    <p class="text-xs text-slate-400">Gekoppeld aan actuele Cardmarket marktprijzen in Nederland</p>
-                </div>
-
-                <div class="flex items-center gap-4">
-                    <div class="text-right">
-                        <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold block">Totale Waarde</span>
-                        <span class="text-2xl sm:text-3xl font-black text-amber-300 font-mono" id="total-val-display">€ 0.00</span>
-                    </div>
-                    <button onclick="resetScanner()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-700 transition flex items-center gap-2 shadow">
-                        <i class="fa-solid fa-arrow-rotate-left"></i> Opnieuw
-                    </button>
-                </div>
-            </div>
-
-            <!-- Kaarten Grid -->
-            <div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Wordt dynamisch ingeladen -->
-            </div>
-        </section>
-
-    </main>
-
-    <!-- Footer -->
-    <footer class="border-t border-slate-900 mt-12 py-5 text-center text-xs text-slate-500">
-        <p class="font-medium">Cardmarket Scanner • powered by <strong class="text-slate-300">BRIMI</strong></p>
-    </footer>
-
-    <script>
-        // API Backend URL (lokaal of jouw Render cloud URL)
-        const BACKEND_API_BASE_URL = "https://brimi-scanner.onrender.com";
-
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
-        const dropContent = document.getElementById('drop-content');
-        const previewWrapper = document.getElementById('preview-wrapper');
-        const imageDisplay = document.getElementById('image-display');
-        const laserEffect = document.getElementById('laser-effect');
-        
-        const scanningState = document.getElementById('scanning-state');
-        const resultsPanel = document.getElementById('results-panel');
-        const cardsContainer = document.getElementById('cards-container');
-        
-        const statusTitle = document.getElementById('status-title');
-        const statusSubtitle = document.getElementById('status-subtitle');
-        const progressIndicator = document.getElementById('progress-indicator');
-        const resultsCount = document.getElementById('results-count');
-        const totalValDisplay = document.getElementById('total-val-display');
-
-        let currentCardsData = [];
-        let currentImageBase64 = null;
-        let currentMimeType = "image/jpeg";
-
-        dropZone.addEventListener('click', () => fileInput.click());
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                dropZone.classList.add('drag-active');
-            });
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('drag-active');
-            });
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                handleUploadedFile(e.dataTransfer.files[0]);
-            }
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files.length > 0) {
-                handleUploadedFile(e.target.files[0]);
-            }
-        });
-
-        function handleUploadedFile(file) {
-            if (!file.type.startsWith('image/')) {
-                alert('Kies een geldige foto van je Pokémon kaart(en).');
-                return;
-            }
-
-            currentMimeType = file.type;
-            const reader = new FileReader();
-
-            reader.onload = (event) => {
-                const fullBase64 = event.target.result;
-                imageDisplay.src = fullBase64;
-                
-                const base64Data = fullBase64.split(',')[1];
-                currentImageBase64 = base64Data;
-
-                dropContent.classList.add('hidden');
-                previewWrapper.classList.remove('hidden');
-                laserEffect.classList.remove('hidden');
-
-                executeCardAnalysis(base64Data, currentMimeType);
-            };
-
-            reader.readAsDataURL(file);
-        }
-
-        function setScanStep(step, title, subtitle, pct) {
-            statusTitle.innerText = title;
-            statusSubtitle.innerText = subtitle;
-            progressIndicator.style.width = pct + '%';
-
-            for (let i = 1; i <= 4; i++) {
-                const el = document.getElementById(`step-${i}`);
-                if (i <= step) {
-                    el.classList.add('border-sky-400', 'text-sky-300', 'bg-slate-800');
-                    el.classList.remove('text-slate-500');
-                } else {
-                    el.classList.remove('border-sky-400', 'text-sky-300', 'bg-slate-800');
-                    el.classList.add('text-slate-500');
-                }
-            }
-        }
-
-        // Live API lookup naar Cardmarket backend
-        async function fetchLiveCardmarketPrices(card) {
-            try {
-                const cleanNum = (card.cardNumber || '').replace(/^0+/, '');
-                const cleanName = (card.cardName || '').trim();
-                const langCode = (card.languageCode || 'EN').toUpperCase();
-                const condCode = (card.condition || 'NM').includes('Near') ? 'NM' : 'LP';
-
-                // 1. Vraag Cardmarket backend aan
-                try {
-                    const apiUrl = `${BACKEND_API_BASE_URL}/api/price?name=${encodeURIComponent(cleanName)}&number=${encodeURIComponent(cleanNum)}&language=${langCode}&condition=${condCode}`;
-                    const backendRes = await fetch(apiUrl, { signal: AbortSignal.timeout(4000) });
-                    if (backendRes.ok) {
-                        const data = await backendRes.json();
-                        if (data && data.lowest_nl_price_eur) {
-                            return {
-                                estimatedPriceEUR: data.lowest_nl_price_eur,
-                                priceTrendEUR: data.price_trend_eur,
-                                avg30DaysEUR: data.avg30_days_eur,
-                                directCardmarketUrl: data.product_url,
-                                matchedViaApi: true
-                            };
-                        }
-                    }
-                } catch (e) {
-                    // Backend nog aan het opstarten; fallback treedt in werking
-                }
-
-                // 2. Publieke database fallback via TCGdex
-                const searchRes = await fetch(`https://api.tcgdex.net/v2/en/cards?localId=${encodeURIComponent(cleanNum)}`);
-                if (searchRes.ok) {
-                    const cardsList = await searchRes.json();
-                    if (Array.isArray(cardsList) && cardsList.length > 0) {
-                        const match = cardsList.find(c => (c.name || '').toLowerCase().includes(cleanName.toLowerCase())) || cardsList[0];
-                        if (match && match.id) {
-                            const detailRes = await fetch(`https://api.tcgdex.net/v2/en/cards/${match.id}`);
-                            if (detailRes.ok) {
-                                const detail = await detailRes.json();
-                                const cm = detail?.pricing?.cardmarket;
-                                if (cm && (cm.low || cm.trend)) {
-                                    const lowPrice = parseFloat(cm.low) || parseFloat(cm.trend);
-                                    const trendPrice = parseFloat(cm.trend) || lowPrice;
-                                    const avg30 = parseFloat(cm.avg30) || parseFloat(cm.avg7) || trendPrice;
-                                    const nlPrice = Math.max(lowPrice, Math.round(lowPrice * 1.15 * 100) / 100);
-
-                                    return {
-                                        estimatedPriceEUR: nlPrice,
-                                        priceTrendEUR: trendPrice,
-                                        avg30DaysEUR: avg30,
-                                        matchedViaApi: true
-                                    };
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (e) {}
-            return null;
-        }
-
-        // Nauwkeurige marktkalibratie voor bekende kaarten
-        function calibrateCardmarketPrice(card) {
-            let price = parseFloat(card.estimatedPriceEUR) || 2.50;
-            const rarity = (card.rarity || '').toLowerCase();
-            const name = (card.cardName || '').toLowerCase();
-            const setCode = (card.setCode || '').toUpperCase();
-            const cardNum = (card.cardNumber || '').trim();
-
-            let trend = 0;
-            let avg30 = 0;
-
-            if (name.includes('exeggutor') && (setCode.includes('30') || cardNum.includes('129'))) {
-                price = 3.00;
-                trend = 2.57;
-                avg30 = 3.75;
-            } else if (name.includes('clawitzer') && (setCode.includes('MEG') || cardNum.includes('141'))) {
-                price = 1.80;
-                trend = 1.93;
-                avg30 = 1.99;
-            } else if (name.includes('dewgong') && (setCode.includes('PFL') || cardNum.includes('097'))) {
-                price = 4.15;
-                trend = 3.95;
-                avg30 = 4.40;
-            } else if (name.includes('goldeen') && (setCode.includes('PBL') || cardNum.includes('087'))) {
-                price = 8.25;
-                trend = 7.44;
-                avg30 = 8.96;
-            } else if (name.includes('palkia') && cardNum.includes('106')) {
-                price = 1.95;
-                trend = 1.79;
-                avg30 = 1.94;
-            } else {
-                const isIllustrationRare = rarity.includes('illustration') && !rarity.includes('special');
-                const isTopChase = name.includes('charizard') || name.includes('darkrai') || name.includes('umbreon') || name.includes('pikachu') || name.includes('gengar') || name.includes('mew') || name.includes('lugia');
-
-                if (isIllustrationRare && !isTopChase) {
-                    if (price > 6.00) price = 2.75;
-                    if (price < 1.20) price = 1.80;
-                } else if (rarity.includes('double rare') || rarity.includes('ex')) {
-                    if (price > 8.00 && !isTopChase) price = 2.25;
-                }
-
-                trend = parseFloat(card.priceTrendEUR) || Math.round(price * 0.95 * 100) / 100;
-                avg30 = parseFloat(card.avg30DaysEUR) || Math.round(price * 1.10 * 100) / 100;
-            }
-
-            return {
-                ...card,
-                estimatedPriceEUR: Math.round(price * 100) / 100,
-                priceTrendEUR: Math.round(trend * 100) / 100,
-                avg30DaysEUR: Math.round(avg30 * 100) / 100
-            };
-        }
-
-        async function executeCardAnalysis(base64Data, mimeType) {
-            scanningState.classList.remove('hidden');
-            resultsPanel.classList.add('hidden');
-            cardsContainer.innerHTML = '';
-
-            setScanStep(1, "Kaart bekijken...", "We controleren de illustratie en het type kaart...", 25);
-
-            const promptText = `
-Je bent een ervaren Pokémon verzamelaar en Cardmarket expert.
-Bekijk de foto zorgvuldig. Er kunnen 1 of meerdere kaarten op staan (ook in sleeves of toploaders).
-
-Identificeer voor ELKE kaart op de foto de exacte gegevens:
-1. Naam van de Pokémon (bijv. "Exeggutor", "Goldeen", "Clawitzer", "Dewgong", "Palkia LV.X").
-2. Setcode en kaartnummer onderaan de kaart (bijv. 30C 129/128, PBL 087/084, MEG 141/132, CEL 106/106).
-3. Setnaam (bijv. "30th Celebration", "Pitch Black", "Mega Evolution", "Celebrations: Classic Collection").
-4. Taal van de kaart (bijv. Engels, Japans) en taalcode (EN, JP, DE, FR).
-5. Conditie volgens Cardmarket richtlijnen: "Near Mint (NM)", "Lightly Played (LP)" of "Played (PL)".
-6. Werkelijke Cardmarket marktprijzen in euro's (€) voor de Europese/Nederlandse markt:
-   - Exeggutor (30C 129): bodemprijs ca. € 2,50, NL verkopers vanaf € 3,00, trend € 2,57, 30d € 3,75.
-   - Clawitzer (MEG 141): bodemprijs ca. € 1,80, trend € 1,93, 30d € 1,99.
-   - Dewgong (PFL 097): bodemprijs ca. € 4,15, trend € 3,95.
-   - Goldeen (PBL 087): bodemprijs ca. € 8,25, trend € 7,44, 30d € 8,96.
-   - Palkia LV.X (CEL 106): bodemprijs ca. € 1,50 - € 1,95, trend € 1,79.
-   - Schat NOOIT absurde bedragen van tientallen euro's voor normale Illustration Rares!
-   - Geef de NL Bodemprijs (estimatedPriceEUR), Price Trend (priceTrendEUR) en 30-dagen gemiddelde (avg30DaysEUR).
-   - Schrijf een feitelijke, korte toelichting op de staat.
+<!-- Header -->
+<header class="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md sticky top-0 z-40">
+<div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+<!-- Brand -->
+<div class="flex flex-col">
+<span class="text-base sm:text-lg font-black tracking-tight text-white uppercase flex items-center gap-2">
+Cardmarket Scanner
+</span>
+<span class="text-[11px] font-semibold text-slate-400">
+powered by <span class="text-sky-400 font-bold tracking-wider">BRIMI</span>
+</span>
+</div>
+<!-- Sleutel & NL Markt Badge -->
+<div class="flex items-center gap-2">
+<button onclick="promptForApiKey()" id="api-key-btn" title="AI Sleutel Instellen" class="px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-sky-300 flex items-center gap-1.5 transition">
+<i class="fa-solid fa-key text-amber-400"></i>
+<span id="api-key-status" class="hidden sm:inline">AI Sleutel</span>
+</button>
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs shadow-inner">
+<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+<span class="font-bold text-white flex items-center gap-1">
+<span>🇳🇱</span> Nederlandse verkopers
+</span>
+</div>
+</div>
+</div>
+</header>
+<main class="max-w-5xl mx-auto w-full px-4 py-6 sm:py-10 flex-grow flex flex-col gap-6">
+<!-- Banner indien sleutel ontbreekt -->
+<div id="missing-key-banner" class="hidden max-w-2xl mx-auto w-full p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-3 shadow-lg">
+<div class="flex items-center gap-3">
+<i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg"></i>
+<div>
+<strong class="block text-white">Google AI Sleutel ontbreekt</strong>
+<span>Vul je gratis sleutel in om de camera daadwerkelijk de kaarten te laten herkennen.</span>
+</div>
+</div>
+<button onclick="promptForApiKey()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold px-3 py-1.5 rounded-lg shrink-0">
+Instellen
+</button>
+</div>
+<!-- Introductie -->
+<div class="text-center max-w-2xl mx-auto space-y-3">
+<div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-950/70 border border-sky-800/60 text-xs font-semibold text-sky-300">
+<i class="fa-solid fa-bolt text-sky-400"></i>
+<span>Nooit meer handmatig typen of zoeken op Cardmarket</span>
+</div>
+<h1 class="text-2xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
+Upload een foto. Zie direct wat je kaarten waard zijn.
+</h1>
+<p class="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg mx-auto">
+Stop met het handmatig intikken van moeilijke setcodes of kaartnummers. Sleep je foto hieronder en zie meteen de actuele prijzen in Nederland.
+</p>
+</div>
+<!-- 3 Feature Blokken (zoals in jouw app overzicht) -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
+<div class="card-glow rounded-xl p-3.5 flex items-center gap-3 border border-slate-800">
+<div class="w-9 h-9 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center text-sm shrink-0">
+<i class="fa-solid fa-camera"></i>
+</div>
+<div>
+<span class="block text-xs font-bold text-white leading-tight">1 of meerdere kaarten</span>
+<span class="text-[11px] text-slate-400 leading-tight">Los, op tafel of een binderpagina</span>
+</div>
+</div>
+<div class="card-glow rounded-xl p-3.5 flex items-center gap-3 border border-slate-800">
+<div class="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-sm shrink-0">
+<i class="fa-solid fa-tag"></i>
+</div>
+<div>
+<span class="block text-xs font-bold text-white leading-tight">Eerlijke NL Prijzen</span>
+<span class="text-[11px] text-slate-400 leading-tight">Gefilterd op actueel Nederlands aanbod</span>
+</div>
+</div>
+<div class="card-glow rounded-xl p-3.5 flex items-center gap-3 border border-slate-800">
+<div class="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-sm shrink-0">
+<i class="fa-solid fa-shield-halved"></i>
+</div>
+<div>
+<span class="block text-xs font-bold text-white leading-tight">Staat & Taal</span>
+<span class="text-[11px] text-slate-400 leading-tight">Prijzen die passen bij jouw conditie</span>
+</div>
+</div>
+</div>
+<!-- Upload Drag & Drop Box -->
+<section id="upload-panel" class="w-full max-w-2xl mx-auto">
+<div id="drop-zone" class="card-glow border-2 border-dashed border-sky-500/40 hover:border-sky-400 rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-xl">
+<input type="file" id="file-input" class="hidden" accept="image/*">
+<div id="drop-content" class="flex flex-col items-center justify-center space-y-4">
+<div class="w-16 h-16 rounded-2xl bg-gradient-to-b from-sky-500/20 to-blue-600/10 border border-sky-500/30 flex items-center justify-center text-sky-400 text-2xl group-hover:scale-110 transition-transform duration-300 shadow-lg">
+<i class="fa-solid fa-camera"></i>
+</div>
+<div class="space-y-1">
+<p class="text-base sm:text-lg font-bold text-white group-hover:text-sky-300 transition-colors">
+Maak een foto of kies uit bibliotheek
+</p>
+<p class="text-xs text-slate-400 max-w-xs mx-auto">
+Herken meerdere kaarten tegelijk, ook in sleeves of toploaders.
+</p>
+</div>
+<div class="pt-1">
+<span class="inline-flex items-center gap-2 bg-sky-500 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs hover:bg-sky-400 transition shadow-lg">
+<i class="fa-solid fa-plus"></i>
+Selecteer foto
+</span>
+</div>
+</div>
+<!-- Preview container tijdens upload -->
+<div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[380px] bg-black/60 flex items-center justify-center border border-slate-800">
+<img id="image-display" src="" alt="Geüploade kaart" class="max-h-[360px] w-auto object-contain rounded-xl">
+<div id="laser-effect" class="hidden shimmer-line"></div>
+</div>
+</div>
+</section>
+<!-- Status & Voortgang -->
+<section id="scanning-state" class="hidden w-full max-w-xl mx-auto card-glow rounded-2xl p-6 border border-sky-500/30 text-center space-y-4 shadow-2xl">
+<div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 text-lg mx-auto flex items-center justify-center">
+<i class="fa-solid fa-spinner fa-spin"></i>
+</div>
+<div class="space-y-1">
+<h3 id="status-title" class="text-base font-bold text-white">Kaart analyseren...</h3>
+<p id="status-subtitle" class="text-xs text-slate-400">We bekijken elke kaart op de foto...</p>
+</div>
+<div class="grid grid-cols-4 gap-2 text-[11px] font-medium text-slate-500 pt-1">
+<div id="step-1" class="p-2 rounded-lg bg-slate-900 border border-slate-800">1. Kaarten</div>
+<div id="step-2" class="p-2 rounded-lg bg-slate-900 border border-slate-800">2. Nummers</div>
+<div id="step-3" class="p-2 rounded-lg bg-slate-900 border border-slate-800">3. Conditie</div>
+<div id="step-4" class="p-2 rounded-lg bg-slate-900 border border-slate-800">4. Cardmarket</div>
+</div>
+<div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+<div id="progress-indicator" class="h-full bg-sky-400 transition-all duration-300 rounded-full" style="width: 25%"></div>
+</div>
+</section>
+<!-- Resultaten Overzicht -->
+<section id="results-panel" class="hidden w-full space-y-5">
+<div class="card-glow rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 border-l-4 border-l-sky-400 shadow-xl">
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<h2 class="text-xl sm:text-2xl font-black text-white" id="results-count">Kaarten Gevonden</h2>
+<span class="text-xs bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/20">Cardmarket NL Live</span>
+</div>
+<p class="text-xs text-slate-400">Gekoppeld aan actuele Cardmarket marktprijzen in Nederland</p>
+</div>
+<div class="flex items-center gap-4">
+<div class="text-right">
+<span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Totale Waarde</span>
+<span class="text-2xl sm:text-3xl font-black text-amber-300 font-mono" id="total-val-display">€ 0.00</span>
+</div>
+<button onclick="resetScanner()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-700 transition flex items-center gap-2 shadow">
+<i class="fa-solid fa-arrow-rotate-left"></i> Opnieuw
+</button>
+</div>
+</div>
+<!-- Kaarten Grid -->
+<div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+<!-- Dynamisch gevuld -->
+</div>
+</section>
+</main>
+<footer class="border-t border-slate-900 py-4 text-center text-xs text-slate-500">
+<p class="font-medium">Cardmarket Scanner • powered by <strong class="text-slate-300">BRIMI</strong></p>
+</footer>
+<script>
+const BACKEND_API_BASE_URL = "https://brimi-scanner-.onrender.com";
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const dropContent = document.getElementById('drop-content');
+const previewWrapper = document.getElementById('preview-wrapper');
+const imageDisplay = document.getElementById('image-display');
+const laserEffect = document.getElementById('laser-effect');
+const scanningState = document.getElementById('scanning-state');
+const resultsPanel = document.getElementById('results-panel');
+const cardsContainer = document.getElementById('cards-container');
+const statusTitle = document.getElementById('status-title');
+const statusSubtitle = document.getElementById('status-subtitle');
+const progressIndicator = document.getElementById('progress-indicator');
+const resultsCount = document.getElementById('results-count');
+const totalValDisplay = document.getElementById('total-val-display');
+const missingKeyBanner = document.getElementById('missing-key-banner');
+const apiKeyStatus = document.getElementById('api-key-status');
+let currentCardsData = [];
+let currentImageBase64 = null;
+let currentMimeType = "image/jpeg";
+function getStoredApiKey() {
+return localStorage.getItem('brimi_gemini_api_key') || "";
+}
+function checkApiKeyStatus() {
+const key = getStoredApiKey();
+if (!key) {
+missingKeyBanner.classList.remove('hidden');
+apiKeyStatus.innerText = "Sleutel instellen";
+} else {
+missingKeyBanner.classList.add('hidden');
+apiKeyStatus.innerText = "Sleutel actief";
+}
+}
+checkApiKeyStatus();
+function promptForApiKey() {
+const current = getStoredApiKey();
+const input = prompt("Plak hier je gratis Google AI Studio Gemini API sleutel:\n(Binnen 1 minuut gratis aangemaakt op https://aistudio.google.com/app/apikey)", current);
+if (input !== null) {
+const trimmed = input.trim();
+if (trimmed.length > 5) {
+localStorage.setItem('brimi_gemini_api_key', trimmed);
+alert("API sleutel succesvol opgeslagen op je iPhone!");
+} else if (trimmed === "") {
+localStorage.removeItem('brimi_gemini_api_key');
+alert("API sleutel verwijderd.");
+}
+checkApiKeyStatus();
+}
+}
+dropZone.addEventListener('click', () => fileInput.click());
+['dragenter', 'dragover'].forEach(eventName => {
+dropZone.addEventListener(eventName, (e) => {
+e.preventDefault();
+dropZone.classList.add('drag-active');
+});
+});
+['dragleave', 'drop'].forEach(eventName => {
+dropZone.addEventListener(eventName, (e) => {
+e.preventDefault();
+dropZone.classList.remove('drag-active');
+});
+});
+dropZone.addEventListener('drop', (e) => {
+if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+handleUploadedFile(e.dataTransfer.files[0]);
+}
+});
+fileInput.addEventListener('change', (e) => {
+if (e.target.files && e.target.files.length > 0) {
+handleUploadedFile(e.target.files[0]);
+}
+});
+function handleUploadedFile(file) {
+if (!file.type.startsWith('image/')) {
+alert('Kies een geldige foto van je Pokémon kaart(en).');
+return;
+}
+const apiKey = getStoredApiKey();
+if (!apiKey) {
+promptForApiKey();
+if (!getStoredApiKey()) {
+alert("Zonder API sleutel kan de camera de foto niet analyseren.");
+return;
+}
+}
+currentMimeType = file.type;
+const reader = new FileReader();
+reader.onload = (event) => {
+const fullBase64 = event.target.result;
+imageDisplay.src = fullBase64;
+const base64Data = fullBase64.split(',')[1];
+currentImageBase64 = base64Data;
+dropContent.classList.add('hidden');
+previewWrapper.classList.remove('hidden');
+laserEffect.classList.remove('hidden');
+executeCardAnalysis(base64Data, currentMimeType);
+};
+reader.readAsDataURL(file);
+}
+function setScanStep(step, title, subtitle, pct) {
+statusTitle.innerText = title;
+statusSubtitle.innerText = subtitle;
+progressIndicator.style.width = pct + '%';
+for (let i = 1; i <= 4; i++) {
+const el = document.getElementById(⁠step-${i}⁠);
+if (i <= step) {
+el.classList.add('border-sky-400', 'text-sky-300', 'bg-slate-800');
+el.classList.remove('text-slate-500');
+} else {
+el.classList.remove('border-sky-400', 'text-sky-300', 'bg-slate-800');
+el.classList.add('text-slate-500');
+}
+}
+}
+async function fetchLiveCardmarketPrices(card) {
+try {
+const cleanNum = (card.cardNumber || '').replace(/^0+/, '');
+const cleanName = (card.cardName || '').trim();
+const langCode = (card.languageCode || 'EN').toUpperCase();
+const condCode = (card.condition || 'NM').includes('Near') ? 'NM' : 'LP';
+const apiUrl = ⁠${BACKEND_API_BASE_URL}/api/price?name=${encodeURIComponent(cleanName)}&number=${encodeURIComponent(cleanNum)}&language=${langCode}&condition=${condCode}⁠;
+const backendRes = await fetch(apiUrl, { signal: AbortSignal.timeout(9000) });
+if (backendRes.ok) {
+const data = await backendRes.json();
+if (data && (data.lowest_nl_price_eur || data.price_trend_eur)) {
+return {
+estimatedPriceEUR: data.lowest_nl_price_eur,
+priceTrendEUR: data.price_trend_eur,
+avg30DaysEUR: data.avg30_days_eur,
+directCardmarketUrl: data.product_url,
+matchedViaApi: true
+};
+}
+}
+} catch (e) {
+console.warn("Render backend niet bereikbaar of reageert traag:", e);
+}
+return null;
+}
+async function executeCardAnalysis(base64Data, mimeType) {
+scanningState.classList.remove('hidden');
+resultsPanel.classList.add('hidden');
+cardsContainer.innerHTML = '';
+setScanStep(1, "Foto inspecteren...", "We zoeken alle kaarten op de afbeelding...", 25);
+const promptText = `
+Je bent een Pokémon TCG expert en taxateur. Bekijk de afbeelding zeer nauwkeurig.
+Er kunnen 1, 2 of meer kaarten op de foto liggen (los, in sleeves of toploaders).
+Identificeer voor IEDERE afzonderlijke Pokémon kaart op de foto:
+1. "cardName": Exacte officiële kaartnaam (bijv. "Pikachu & Zekrom GX", "Palkia LV.X").
+2. "setCode": Setcode linksonder of rechtsonder (bijv. "CEL", "SM", "SVP").
+3. "cardNumber": Het exacte kaartnummer (bijv. "106", "SM248", "162").
+4. "setTotal": Het totaalaantal van de reeks indien zichtbaar (bijv. "106").
+5. "setName": De volledige serienaam (bijv. "Celebrations: Classic Collection").
+6. "language": De taal ("Engels", "Japans", etc.).
+7. "languageCode": "EN" of "JP".
+8. "rarity": Zeldzaamheid ("Classic Collection", "Promo", "Ultra Rare", etc.).
+9. "condition": "Near Mint (NM)", "Lightly Played (LP)" of "Played (PL)".
+10. "conditionReason": Korte beschrijving van de visuele staat op de foto.
+11. "estimatedPriceEUR": Realistische Cardmarket bodemprijs in euro's als getal.
+12. "priceTrendEUR": Realistische markttrend in euro's als getal.
+13. "avg30DaysEUR": 30-dagen gemiddelde in euro's als getal.
+Antwoord UITSLUITEND met een JSON ARRAY met een object per gedetecteerde kaart.
 `;
-
-            try {
-                setTimeout(() => {
-                    setScanStep(2, "Kaartnummer aflezen...", "Setcode en nummer controleren...", 50);
-                }, 700);
-
-                setTimeout(() => {
-                    setScanStep(3, "Staat bepalen...", "Randen en conditie beoordelen...", 1400);
-                }, 1400);
-
-                const apiKey = "";
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-                const payload = {
-                    contents: [
-                        {
-                            role: "user",
-                            parts: [
-                                { text: promptText },
-                                {
-                                    inlineData: {
-                                        mimeType: mimeType || "image/jpeg",
-                                        data: base64Data
-                                    }
-                                }
-                            ]
-                        }
-                    ],
-                    generationConfig: {
-                        responseMimeType: "application/json",
-                        responseSchema: {
-                            type: "ARRAY",
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    "cardName": { "type": "STRING" },
-                                    "setName": { "type": "STRING" },
-                                    "setCode": { "type": "STRING" },
-                                    "cardNumber": { "type": "STRING" },
-                                    "setTotal": { "type": "STRING" },
-                                    "language": { "type": "STRING" },
-                                    "languageCode": { "type": "STRING" },
-                                    "rarity": { "type": "STRING" },
-                                    "condition": { "type": "STRING" },
-                                    "conditionReason": { "type": "STRING" },
-                                    "estimatedPriceEUR": { "type": "NUMBER" },
-                                    "priceTrendEUR": { "type": "NUMBER" },
-                                    "avg30DaysEUR": { "type": "NUMBER" }
-                                },
-                                "propertyOrdering": [
-                                    "cardName", "setName", "setCode", "cardNumber", "setTotal", 
-                                    "language", "languageCode", "rarity", "condition", 
-                                    "conditionReason", "estimatedPriceEUR", "priceTrendEUR", "avg30DaysEUR"
-                                ]
-                            }
-                        }
-                    }
-                };
-
-                let response = null;
-                let attempts = 0;
-                while (attempts < 2) {
-                    try {
-                        response = await fetch(apiUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-                        if (response.ok) break;
-                    } catch (e) {}
-                    attempts++;
-                }
-
-                setScanStep(4, "Cardmarket NL prijzen koppelen...", "Prijzen van Nederlandse verkopers inladen...", 90);
-
-                let parsedCards = [];
-                if (response && response.ok) {
-                    const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) {
-                        parsedCards = JSON.parse(text);
-                    }
-                }
-
-                if (!parsedCards || parsedCards.length === 0) {
-                    parsedCards = [
-                        {
-                            cardName: "Exeggutor",
-                            setName: "30th Celebration",
-                            setCode: "30C",
-                            cardNumber: "129",
-                            setTotal: "128",
-                            language: "Engels",
-                            languageCode: "EN",
-                            rarity: "Illustration Rare",
-                            condition: "Near Mint (NM)",
-                            conditionReason: "Strakke kaart zonder randschade of krassen.",
-                            estimatedPriceEUR: 3.00,
-                            priceTrendEUR: 2.57,
-                            avg30DaysEUR: 3.75
-                        }
-                    ];
-                }
-
-                const finalizedCards = [];
-                for (const card of parsedCards) {
-                    const liveData = await fetchLiveCardmarketPrices(card);
-                    if (liveData) {
-                        finalizedCards.push({
-                            ...card,
-                            estimatedPriceEUR: liveData.estimatedPriceEUR,
-                            priceTrendEUR: liveData.priceTrendEUR,
-                            avg30DaysEUR: liveData.avg30DaysEUR
-                        });
-                    } else {
-                        finalizedCards.push(calibrateCardmarketPrice(card));
-                    }
-                }
-
-                currentCardsData = finalizedCards;
-                renderResults(currentCardsData);
-
-            } catch (err) {
-                console.error(err);
-                alert("Er ging iets mis bij het ophalen van de gegevens. Probeer het opnieuw.");
-                resetScanner();
-            } finally {
-                laserEffect.classList.add('hidden');
-                scanningState.classList.add('hidden');
-            }
-        }
-
-        function getLanguageFlag(langCode) {
-            const code = (langCode || 'EN').toUpperCase();
-            if (code === 'EN') return '🇬🇧';
-            if (code === 'JP') return '🇯🇵';
-            if (code === 'DE') return '🇩🇪';
-            if (code === 'FR') return '🇫🇷';
-            return '🌐';
-        }
-
-        function updateCardPriceManually(index) {
-            const current = currentCardsData[index].estimatedPriceEUR;
-            const newPriceStr = prompt(`Pas de Cardmarket NL prijs aan voor ${currentCardsData[index].cardName}:`, current.toFixed(2));
-            if (newPriceStr !== null) {
-                const parsed = parseFloat(newPriceStr.replace(',', '.'));
-                if (!isNaN(parsed) && parsed >= 0) {
-                    currentCardsData[index].estimatedPriceEUR = parsed;
-                    currentCardsData[index].priceTrendEUR = Math.round(parsed * 0.95 * 100) / 100;
-                    currentCardsData[index].avg30DaysEUR = Math.round(parsed * 1.05 * 100) / 100;
-                    renderResults(currentCardsData);
-                }
-            }
-        }
-
-        function renderResults(cards) {
-            resultsPanel.classList.remove('hidden');
-            resultsCount.innerText = `${cards.length} ${cards.length === 1 ? 'Kaart' : 'Kaarten'} Gevonden`;
-            
-            let totalValue = 0;
-            cardsContainer.innerHTML = '';
-
-            cards.forEach((card, idx) => {
-                const price = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 2.50;
-                const trend = typeof card.priceTrendEUR === 'number' ? card.priceTrendEUR : (price * 0.95);
-                const avg30 = typeof card.avg30DaysEUR === 'number' ? card.avg30DaysEUR : (price * 1.05);
-                totalValue += price;
-
-                const flag = getLanguageFlag(card.languageCode);
-                const cmSearchQuery = `${card.cardName} ${card.cardNumber}`;
-                const cardmarketNLUrl = `https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(cmSearchQuery)}&sellerCountry=17`;
-
-                const cardItem = document.createElement('div');
-                cardItem.className = "card-glow rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between space-y-5 shadow-xl relative overflow-hidden";
-
-                cardItem.innerHTML = `
-                    <div class="space-y-4">
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <div class="flex flex-wrap items-center gap-1.5 mb-1.5 text-xs font-semibold">
-                                    <span class="bg-slate-900 text-sky-300 px-2 py-0.5 rounded border border-slate-800 font-mono">
-                                        ${card.setCode || 'SET'} ${card.cardNumber}/${card.setTotal || ''}
-                                    </span>
-                                    <span class="bg-slate-900 text-slate-300 px-2 py-0.5 rounded border border-slate-800 flex items-center gap-1">
-                                        <span>${flag}</span>
-                                        <span>${card.language || 'Engels'}</span>
-                                    </span>
-                                </div>
-                                <h3 class="text-2xl font-black text-white">${card.cardName}</h3>
-                                <p class="text-xs text-slate-400">${card.setName} Reeks • ${card.rarity || 'Kaart'}</p>
-                            </div>
-                            <div class="text-right">
-                                <span class="text-[10px] text-slate-400 block uppercase font-bold">NL Vanaf</span>
-                                <div class="flex items-center justify-end gap-1.5">
-                                    <span class="text-2xl font-black text-amber-300 font-mono">€ ${price.toFixed(2)}</span>
-                                    <button onclick="updateCardPriceManually(${idx})" title="Pas prijs handmatig aan" class="text-slate-400 hover:text-sky-300 text-xs p-1">
-                                        <i class="fa-solid fa-pen-to-square"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-3 gap-2 text-center">
-                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                                <span class="text-[10px] font-bold text-slate-400 block uppercase">Laagste NL</span>
-                                <span class="text-sm font-extrabold text-emerald-400 font-mono">€ ${price.toFixed(2)}</span>
-                            </div>
-                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                                <span class="text-[10px] font-bold text-slate-400 block uppercase">Markttrend</span>
-                                <span class="text-sm font-extrabold text-slate-200 font-mono">€ ${trend.toFixed(2)}</span>
-                            </div>
-                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                                <span class="text-[10px] font-bold text-slate-400 block uppercase">30d Gem.</span>
-                                <span class="text-sm font-extrabold text-slate-400 font-mono">€ ${avg30.toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                        <div class="bg-slate-950/80 rounded-xl p-3.5 border border-slate-800 space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs text-slate-300 font-medium">Conditie van jouw kaart:</span>
-                                <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                    ${card.condition}
-                                </span>
-                            </div>
-                            <p class="text-xs text-slate-400 leading-relaxed">
-                                ${card.conditionReason || 'In nette staat met scherpe hoekjes en strakke randen.'}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div>
-                        <a href="${cardmarketNLUrl}" target="_blank" rel="noopener noreferrer" 
-                           class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold py-3 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-lg text-sm">
-                            <span>Bekijk Nederlandse verkopers op Cardmarket</span>
-                            <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
-                        </a>
-                    </div>
-                `;
-
-                cardsContainer.appendChild(cardItem);
-            });
-
-            totalValDisplay.innerText = `€ ${totalValue.toFixed(2)}`;
-        }
-
-        function resetScanner() {
-            resultsPanel.classList.add('hidden');
-            scanningState.classList.add('hidden');
-            dropContent.classList.remove('hidden');
-            previewWrapper.classList.add('hidden');
-            laserEffect.classList.add('hidden');
-            
-            imageDisplay.src = '';
-            fileInput.value = '';
-            currentImageBase64 = null;
-            currentCardsData = [];
-        }
-    </script>
+try {
+setTimeout(() => setScanStep(2, "Kaartnummers & sets aflezen...", "Nummers linksonder en rechtsonder controleren...", 50), 700);
+setTimeout(() => setScanStep(3, "Conditie & zeldzaamheid bepalen...", "Randen en kwaliteit beoordelen...", 1400), 1400);
+const apiKey = getStoredApiKey();
+const apiUrl = ⁠https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}⁠;
+const payload = {
+contents: [
+{
+role: "user",
+parts: [
+{ text: promptText },
+{
+inlineData: {
+mimeType: mimeType || "image/jpeg",
+data: base64Data
+}
+}
+]
+}
+],
+generationConfig: {
+responseMimeType: "application/json"
+}
+};
+const response = await fetch(apiUrl, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(payload)
+});
+if (!response.ok) {
+const errBody = await response.json();
+throw new Error(errBody?.error?.message || "Google AI Vision weigerde het verzoek.");
+}
+setScanStep(4, "Cardmarket NL data koppelen...", "Prijzen ophalen via Render backend...", 90);
+const result = await response.json();
+const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+let detectedCards = [];
+if (rawText) {
+detectedCards = JSON.parse(rawText);
+if (!Array.isArray(detectedCards)) {
+detectedCards = [detectedCards];
+}
+}
+if (detectedCards.length === 0) {
+throw new Error("Geen Pokémon kaarten herkend op deze foto. Zorg voor goed licht.");
+}
+// Koppel elke herkende kaart aan de live Render backend
+const finalizedCards = [];
+for (const card of detectedCards) {
+const liveData = await fetchLiveCardmarketPrices(card);
+if (liveData) {
+finalizedCards.push({
+...card,
+estimatedPriceEUR: liveData.estimatedPriceEUR,
+priceTrendEUR: liveData.priceTrendEUR,
+avg30DaysEUR: liveData.avg30DaysEUR,
+directCardmarketUrl: liveData.directCardmarketUrl
+});
+} else {
+finalizedCards.push(card);
+}
+}
+currentCardsData = finalizedCards;
+renderResults(currentCardsData);
+} catch (err) {
+console.error(err);
+alert("Fout bij analyseren:\n" + err.message + "\n\nControleer of je API-sleutel klopt via de knop 'AI Sleutel' bovenaan.");
+resetScanner();
+} finally {
+laserEffect.classList.add('hidden');
+scanningState.classList.add('hidden');
+}
+}
+function getLanguageFlag(langCode) {
+const code = (langCode || 'EN').toUpperCase();
+if (code === 'EN') return '🇬🇧';
+if (code === 'JP') return '🇯🇵';
+if (code === 'DE') return '🇩🇪';
+if (code === 'FR') return '🇫🇷';
+return '🌐';
+}
+function updateCardPriceManually(index) {
+const current = currentCardsData[index].estimatedPriceEUR || 2.50;
+const newPriceStr = prompt(⁠Pas de Cardmarket NL prijs aan voor ${currentCardsData[index].cardName}:⁠, current.toFixed(2));
+if (newPriceStr !== null) {
+const parsed = parseFloat(newPriceStr.replace(',', '.'));
+if (!isNaN(parsed) && parsed >= 0) {
+currentCardsData[index].estimatedPriceEUR = parsed;
+currentCardsData[index].priceTrendEUR = Math.round(parsed * 0.95 * 100) / 100;
+currentCardsData[index].avg30DaysEUR = Math.round(parsed * 1.05 * 100) / 100;
+renderResults(currentCardsData);
+}
+}
+}
+function renderResults(cards) {
+resultsPanel.classList.remove('hidden');
+resultsCount.innerText = ⁠${cards.length} ${cards.length === 1 ? 'Kaart' : 'Kaarten'} Gevonden⁠;
+let totalValue = 0;
+cardsContainer.innerHTML = '';
+cards.forEach((card, idx) => {
+const price = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 2.50;
+const trend = typeof card.priceTrendEUR === 'number' ? card.priceTrendEUR : (price * 0.95);
+const avg30 = typeof card.avg30DaysEUR === 'number' ? card.avg30DaysEUR : (price * 1.05);
+totalValue += price;
+const flag = getLanguageFlag(card.languageCode);
+const cmSearchQuery = ⁠${card.cardName} ${card.cardNumber || ''}⁠.trim();
+const cardmarketNLUrl = card.directCardmarketUrl || ⁠https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(cmSearchQuery)}&sellerCountry=17⁠;
+const cardItem = document.createElement('div');
+cardItem.className = "card-glow rounded-2xl p-5 sm:p-6 transition-all duration-300 flex flex-col justify-between space-y-4 shadow-xl relative overflow-hidden";
+cardItem.innerHTML = `
+<div class="space-y-4">
+<div class="flex items-start justify-between gap-3">
+<div>
+<div class="flex flex-wrap items-center gap-1.5 mb-1.5 text-xs font-semibold">
+<span class="bg-slate-900 text-sky-300 px-2 py-0.5 rounded border border-slate-800 font-mono">
+￼
+￼
+￼
+￼{flag}</span>
+<span>￼
+￼
+￼
+￼{card.cardName}</h3>
+<p class="text-xs text-slate-400">${card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
+</div>
+<div class="text-right shrink-0">
+<span class="text-[10px] text-slate-400 block uppercase font-bold">NL Vanaf</span>
+<div class="flex items-center justify-end gap-1.5">
+<span class="text-2xl font-black text-amber-300 font-mono">€ ${price.toFixed(2)}</span>
+<button onclick="updateCardPriceManually(${idx})" title="Pas prijs handmatig aan" class="text-slate-400 hover:text-sky-300 text-xs p-1">
+<i class="fa-solid fa-pen-to-square"></i>
+</button>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-2 text-center">
+<div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+<span class="text-[10px] font-bold text-slate-400 block uppercase">Laagste NL</span>
+<span class="text-sm font-extrabold text-emerald-400 font-mono">€ ${price.toFixed(2)}</span>
+</div>
+<div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+<span class="text-[10px] font-bold text-slate-400 block uppercase">Markttrend</span>
+<span class="text-sm font-extrabold text-slate-200 font-mono">€ ${trend.toFixed(2)}</span>
+</div>
+<div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+<span class="text-[10px] font-bold text-slate-400 block uppercase">30d Gem.</span>
+<span class="text-sm font-extrabold text-slate-400 font-mono">€ ${avg30.toFixed(2)}</span>
+</div>
+</div>
+<div class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 space-y-1">
+<div class="flex items-center justify-between">
+<span class="text-xs text-slate-300 font-medium">Conditie van jouw kaart:</span>
+<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+${card.condition || 'Near Mint (NM)'}
+</span>
+</div>
+<p class="text-xs text-slate-400 leading-relaxed">
+${card.conditionReason || 'In nette staat met scherpe hoekjes en strakke randen.'}
+</p>
+</div>
+</div>
+<div class="pt-1">
+<a href="${cardmarketNLUrl}" target="_blank" rel="noopener noreferrer" 
+class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-lg text-xs sm:text-sm">
+<span>Bekijk Nederlandse verkopers op Cardmarket</span>
+<i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+</a>
+</div>
+`;
+cardsContainer.appendChild(cardItem);
+});
+totalValDisplay.innerText = ⁠€ ${totalValue.toFixed(2)}⁠;
+}
+function resetScanner() {
+resultsPanel.classList.add('hidden');
+scanningState.classList.add('hidden');
+dropContent.classList.remove('hidden');
+previewWrapper.classList.add('hidden');
+laserEffect.classList.add('hidden');
+imageDisplay.src = '';
+fileInput.value = '';
+currentImageBase64 = null;
+currentCardsData = [];
+}
+</script>
 </body>
 </html>
