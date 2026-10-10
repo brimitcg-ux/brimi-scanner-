@@ -106,7 +106,7 @@
 
         <section id="upload-panel" class="w-full max-w-2xl mx-auto">
             <label for="file-input" id="drop-zone" class="card-glow block border-2 border-dashed border-sky-500/40 hover:border-sky-400 rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-xl active:scale-[0.99]">
-                <input type="file" id="file-input" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" accept="image/*">
+                <input type="file" id="file-input" class="hidden" accept="image/*">
                 
                 <div id="drop-content" class="flex flex-col items-center justify-center space-y-4 pointer-events-none">
                     <div class="w-16 h-16 rounded-2xl bg-gradient-to-b from-sky-500/20 to-blue-600/10 border border-sky-500/30 flex items-center justify-center text-sky-400 text-2xl group-hover:scale-110 transition-transform duration-300 shadow-lg">
@@ -197,7 +197,7 @@
                 <h4 id="modal-title" class="text-base font-bold text-white">Bericht</h4>
                 <p id="modal-desc" class="text-xs text-slate-300 leading-relaxed"></p>
             </div>
-            <button type="button" id="modal-close" class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2 rounded-xl text-xs transition">
+            <button type="button" id="modal-close" class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer">
                 Begrepen
             </button>
         </div>
@@ -208,7 +208,7 @@
     </footer>
 
     <script>
-        // Exacte URL uit jouw Render dashboard (zonder het foute streepje aan het eind)
+        // Exacte backend URL op Render
         const BACKEND_API_BASE_URL = "https://brimi-scanner.onrender.com";
 
         const fileInput = document.getElementById('file-input');
@@ -268,7 +268,7 @@
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const maxDim = 1600;
+                    const maxDim = 1200;
 
                     if (width > maxDim || height > maxDim) {
                         if (width > height) {
@@ -285,7 +285,7 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
                     imageDisplay.src = compressedBase64;
                     const rawBase64 = compressedBase64.split(',')[1];
 
@@ -331,7 +331,10 @@
 
                 const response = await fetch(`${BACKEND_API_BASE_URL}/api/scan`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({
                         image_base64: base64Data,
                         mime_type: mimeType || "image/jpeg"
@@ -340,7 +343,8 @@
 
                 if (!response.ok) {
                     const errData = await response.json().catch(() => ({}));
-                    throw new Error(errData.detail || `Server reageert niet (${response.status}). Probeer over enkele seconden opnieuw.`);
+                    const detailMsg = errData.detail || `Server status ${response.status}`;
+                    throw new Error(detailMsg);
                 }
 
                 const cards = await response.json();
@@ -352,8 +356,8 @@
                 renderResults(currentCardsData);
 
             } catch (err) {
-                console.error(err);
-                showNotification("Scan Probleem", err.message || "Er ging iets mis bij het scannen.");
+                console.error("Scan error:", err);
+                showNotification("Scan Probleem", err.message || "Er ging iets mis bij het scannen. Probeer over enkele seconden opnieuw.");
                 resetScanner();
             } finally {
                 laserEffect.classList.add('hidden');
