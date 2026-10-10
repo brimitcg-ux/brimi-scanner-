@@ -13,11 +13,10 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="BRIMI Turbo Scanner Engine",
-    description="Supersnelle Pokémon kaartdetectie met directe Cardmarket NL koppeling en slab-herkenning.",
-    version="6.6.0"
+    description="Pokémon kaartdetectie met Cardmarket NL voor singles en PriceCharting voor graded slabs.",
+    version="6.7.0"
 )
 
-# Open CORS voor iPhone Safari en PWA
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,18 +43,26 @@ def clean_card_number(raw_num: str) -> str:
     return re.sub(r"^0+", "", main_num) or "0"
 
 def get_base_cardmarket_url(card_name: str, card_number: str) -> str:
-    """Genereert de directe Cardmarket link gefilterd op Nederlandse verkopers (sellerCountry=17) en Near Mint (minCondition=2)."""
+    """Cardmarket NL link gefilterd op Nederlandse verkopers (sellerCountry=17) en Near Mint (minCondition=2)."""
     clean_num = clean_card_number(card_number)
     query = f"{card_name} {clean_num}".strip()
     return f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(query)}&sellerCountry=17&minCondition=2"
 
-def get_ebay_url(card_name: str, card_number: str, lang: str = "") -> str:
-    """eBay Sold link voor Aziatische kaarten die niet op Cardmarket verhandeld worden."""
-    query = f"pokemon {card_name} {card_number} {lang}".strip()
-    return f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(query)}&LH_Sold=1&LH_Complete=1"
+def get_pricecharting_url(card_name: str, card_number: str) -> str:
+    """PriceCharting link met koershistorie voor ungraded en graded (PSA 9, PSA 10, etc.)."""
+    clean_num = clean_card_number(card_number)
+    query = f"pokemon {card_name} {clean_num}".strip()
+    return f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(query)}&type=prices"
+
+def get_ebay_sold_url(card_name: str, card_number: str, slab_info: Optional[str] = None) -> str:
+    """eBay Sold link voor slabs of Aziatische kaarten."""
+    query = f"pokemon {card_name} {card_number}"
+    if slab_info:
+        query = f"{slab_info} {query}"
+    return f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(query.strip())}&LH_Sold=1&LH_Complete=1"
 
 async def get_working_gemini_models(api_key: str) -> List[str]:
-    """Haalt dynamisch de actuele, beschikbare modellen op die generateContent ondersteunen."""
+    """Haalt dynamisch beschikbare modellen op die generateContent ondersteunen."""
     global MODELS_CACHE, MODELS_CACHE_TIME
     now = datetime.now()
     if MODELS_CACHE and MODELS_CACHE_TIME and (now - MODELS_CACHE_TIME < timedelta(hours=1)):
@@ -91,27 +98,53 @@ async def get_working_gemini_models(api_key: str) -> List[str]:
     MODELS_CACHE_TIME = now
     return combined
 
-async def resolve_cardmarket_price(card_name: str, card_number: str, language_code: str, ai_estimate: float) -> Dict[str, Any]:
-    """Snelle prijsresolutie met caching zonder vertraging."""
+async def resolve_card_price(
+    card_name: str, 
+    card_number: str, 
+    language_code: str, 
+    ai_estimate: float,
+    is_graded: bool = False,
+    grading_company: Optional[str] = None,
+    grade: Optional[str] = None
+) -> Dict[str, Any]:
+    """Prijsresolutie: PriceCharting voor slabs, eBay voor Chinees, Cardmarket NL voor raw singles."""
     clean_num = clean_card_number(card_number)
-    cache_key = f"{card_name.lower()}_{clean_num}_{language_code}".strip()
+    slab_id = f"{grading_company}_{grade}".lower() if is_graded else "raw"
+    cache_key = f"{card_name.lower()}_{clean_num}_{language_code}_{slab_id}".strip()
     now = datetime.now()
 
     if cache_key in PRICE_CACHE and (now - PRICE_CACHE[cache_key]["time"] < CACHE_TTL):
         return PRICE_CACHE[cache_key]["data"]
 
+    # 1. Gecertificeerde Graded Slabs (PSA / CGC / BGS / etc.)
+    if is_graded:
+        pc_url = get_pricecharting_url(card_name, card_number)
+        label = f"{grading_company or 'Slab'} {grade or ''}".strip()
+        data = {
+            "price_eur": round(max(ai_estimate, 10.0), 2),
+            "url": pc_url,
+            "source": f"PriceCharting ({label})",
+            "is_graded": True,
+            "is_chinese": False
+        }
+        PRICE_CACHE[cache_key] = {"time": now, "data": data}
+        return data
+
+    # 2. Chinese kaarten (niet op Cardmarket)
     is_chinese = (language_code.upper() in ["CN", "ZH", "CHINESE"]) or ("chinees" in language_code.lower())
     if is_chinese:
-        ebay_url = get_ebay_url(card_name, card_number, "Chinese")
+        ebay_url = get_ebay_sold_url(card_name, card_number)
         data = {
             "price_eur": round(max(ai_estimate, 4.0), 2),
             "url": ebay_url,
             "source": "eBay Sold (Chinees)",
+            "is_graded": False,
             "is_chinese": True
         }
         PRICE_CACHE[cache_key] = {"time": now, "data": data}
         return data
 
+    # 3. Reguliere Singles (Cardmarket NL)
     cm_url = get_base_cardmarket_url(card_name, card_number)
     resolved_price = round(max(ai_estimate, 1.50), 2)
     source = "Cardmarket NL Richtprijs"
@@ -142,6 +175,7 @@ async def resolve_cardmarket_price(card_name: str, card_number: str, language_co
         "price_eur": resolved_price,
         "url": cm_url,
         "source": source,
+        "is_graded": False,
         "is_chinese": False
     }
     PRICE_CACHE[cache_key] = {"time": now, "data": data}
@@ -149,8 +183,7 @@ async def resolve_cardmarket_price(card_name: str, card_number: str, language_co
 
 @app.get("/")
 def ping():
-    """Lichtgewicht ping-endpoint voor pre-warming en keep-alive pings."""
-    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.6.0"}
+    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.7.0"}
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
@@ -166,12 +199,14 @@ Analyseer deze Pokémon kaartfoto direct:
 4. Setcode: letters linksonder (bijv. PBL, PFL, ME05, SVE).
 5. Setnaam: herken de reeks (bijv. Pitch Black, Phantasmal Flames, Surging Sparks).
 6. Taal: Chinees indien vereenvoudigde karakters (taalCode: 'CN'), Japans ('JP') of Engels ('EN').
-7. Graded Slab: Check of de kaart in een graded slab zit (bijv. PSA, Beckett/BGS, CGC, PCA, AP Grading).
+7. Graded Slab: Check of de kaart in een gecertificeerde slab zit (bijv. PSA, BGS/Beckett, CGC, PCA, AP Grading).
    - isGraded: true/false
-   - gradingCompany: "PSA", "BGS", "CGC" of null
-   - grade: bijv. "10", "9.5", "9" of null
-8. Conditie: Indien graded geef de grade weer (bijv. "PSA 10 Gem Mint"). Indien raw, kies uit: "Near Mint (NM)", "Light Played (LP)", "Good (GD)".
-9. Reële marktprijs in euro (realistische Nederlandse beurswaarde).
+   - gradingCompany: "PSA", "BGS", "CGC", "PCA" of null
+   - grade: bijv. "10", "9.5", "9", "8" of null
+8. Conditie: Indien graded geef de volledige omschrijving (bijv. "PSA 10 Gem Mint"). Indien raw, kies uit: "Near Mint (NM)", "Light Played (LP)", "Good (GD)".
+9. Reële marktwaarde in euro:
+   - Indien RAW: schat de Nederlandse Cardmarket marktwaarde.
+   - Indien GRADED SLAB: schat de werkelijke PriceCharting / eBay Sold veilingwaarde specifiek voor deze grader en grade (bijv. PSA 10 ligt vaak aanzienlijk hoger dan raw).
 
 JSON Formaat:
 [
@@ -258,25 +293,28 @@ JSON Formaat:
         raise HTTPException(status_code=500, detail="Ongeldig antwoord van scanner engine.")
 
     async def enrich_card(c: dict):
-        base_estimate = float(c.get("marketEstimateEUR") or 2.50)
-        price_info = await resolve_cardmarket_price(
+        base_estimate = float(c.get("marketEstimateEUR") or 3.00)
+        is_graded = bool(c.get("isGraded") or c.get("gradingCompany"))
+        price_info = await resolve_card_price(
             card_name=c.get("cardName", "Pokémon Kaart"),
             card_number=str(c.get("cardNumber", "")),
             language_code=c.get("languageCode", "EN"),
-            ai_estimate=base_estimate
+            ai_estimate=base_estimate,
+            is_graded=is_graded,
+            grading_company=c.get("gradingCompany"),
+            grade=c.get("grade")
         )
-        
+
         final_price = price_info["price_eur"]
-        if c.get("isGraded") and c.get("grade") in ["10", "Gem Mint", "Pristine"]:
-            final_price = round(final_price * 2.2, 2)
 
         return {
             **c,
             "basePriceNM": final_price,
             "estimatedPriceEUR": final_price,
-            "directCardmarketUrl": price_info["url"],
+            "directMarketUrl": price_info["url"],
             "priceSource": price_info["source"],
-            "isChinese": price_info["is_chinese"]
+            "isChinese": price_info.get("is_chinese", False),
+            "isGraded": is_graded
         }
 
     enriched = await asyncio.gather(*[enrich_card(c) for c in cards_data])
