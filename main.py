@@ -14,10 +14,10 @@ from pydantic import BaseModel
 app = FastAPI(
     title="BRIMI Cardmarket & AI Vision Engine",
     description="Centrale backend voor automatische kaartdetectie via AI en live Cardmarket NL prijzen.",
-    version="2.2.0"
+    version="2.3.0"
 )
 
-# CORS geoptimaliseerd voor WebKit / Safari op iOS
+# CORS geoptimaliseerd voor Safari / WebKit op iOS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -229,7 +229,7 @@ async def get_price(name: str, number: str, language: str = "EN", condition: str
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
-    """Ontvangt de foto, herkent via AI alle kaarten en zoekt direct de Cardmarket NL prijzen."""
+    """Ontvangt de foto, herkent via actieve Google Gemini AI alle kaarten en zoekt direct de Cardmarket NL prijzen."""
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
         raise HTTPException(
@@ -254,7 +254,7 @@ Identificeer voor IEDERE afzonderlijke Pokémon kaart op de foto:
 10. "conditionReason": Korte beschrijving van de visuele staat op de foto.
 
 Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde kaart.
-Geef geen markdown opmaak of extra uitleg, alleen de JSON array.
+Geef geen markdown opmaak of extra tekst, alleen de JSON array.
 """
 
     gemini_body = {
@@ -274,26 +274,32 @@ Geef geen markdown opmaak of extra uitleg, alleen de JSON array.
         ],
         "generationConfig": {
             "responseMimeType": "application/json"
-        },
-        "safetySettings": [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-        ]
+        }
     }
 
-    # Actuele Flash-modellen
-    models_to_try = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-flash-latest",
-        "gemini-1.5-flash"
-    ]
     raw_text = ""
     error_logs = []
 
     async with httpx.AsyncClient(timeout=45.0) as client:
+        # Dynamisch de actieve modellen voor deze API-sleutel ophalen
+        discovered_models = []
+        try:
+            list_resp = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
+            if list_resp.status_code == 200:
+                for item in list_resp.json().get("models", []):
+                    m_name = item.get("name", "").replace("models/", "")
+                    methods = item.get("supportedGenerationMethods", [])
+                    if "generateContent" in methods:
+                        discovered_models.append(m_name)
+        except Exception as e:
+            error_logs.append(f"Model-lijst ophalen: {str(e)[:60]}")
+
+        # Prioriteer de moderne Flash modellen die beschikbaar zijn
+        preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+        models_to_try = [m for m in preferred if m in discovered_models]
+        if not models_to_try:
+            models_to_try = [m for m in discovered_models if "flash" in m] or preferred
+
         for model_name in models_to_try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             try:
@@ -314,15 +320,13 @@ Geef geen markdown opmaak of extra uitleg, alleen de JSON array.
                         else:
                             finish_r = candidates[0].get("finishReason", "GEEN_TEKST")
                             error_logs.append(f"{model_name}: 200 OK maar finishReason={finish_r}")
-                    else:
-                        error_logs.append(f"{model_name}: 200 OK maar lege candidates lijst")
                 else:
                     error_logs.append(f"{model_name} (HTTP {res.status_code}): {res.text[:120]}")
             except Exception as e:
-                error_logs.append(f"{model_name} exception: {str(e)[:120]}")
+                error_logs.append(f"{model_name} uitzondering: {str(e)[:120]}")
 
     if not raw_text:
-        diagnose = " | ".join(error_logs[-2:]) if error_logs else "Onbekende time-out"
+        diagnose = " | ".join(error_logs[-2:]) if error_logs else "Geen actief AI-model gevonden"
         raise HTTPException(
             status_code=502, 
             detail=f"Google AI Vision kon niet worden geraadpleegd: {diagnose}"
