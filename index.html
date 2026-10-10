@@ -3,444 +3,639 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cardmarket Scanner powered by BRIMI</title>
+    <title>BRIMI — Cardmarket Scanner</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brimi: {
+                            navy: '#050a14',
+                            midnight: '#081224',
+                            surface: '#0d1d36',
+                            slate: '#6f83a0',
+                            slateLight: '#91a4bf',
+                            ring: '#4b5f7e',
+                            gold: '#facc15',
+                            emerald: '#10b981'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', '-apple-system', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
         body { 
-            background: radial-gradient(circle at 50% 0%, #0f2347 0%, #060d1a 50%, #030710 100%);
-            color: #f8fafc;
+            background: radial-gradient(circle at 50% 0%, #0d1e38 0%, #050a14 75%, #02050a 100%);
+            color: #f1f5f9;
             min-height: 100vh;
         }
-        .card-glow {
-            background: rgba(13, 24, 41, 0.88);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(148, 163, 184, 0.15);
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+
+        /* Glazen oppervlakte met verfijnde rand */
+        .hud-glass {
+            background: rgba(13, 29, 54, 0.72);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(111, 131, 160, 0.22);
+            box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.75);
         }
-        @keyframes scan-laser {
-            0% { top: 0%; opacity: 0.8; }
-            50% { top: 96%; opacity: 1; }
-            100% { top: 0%; opacity: 0.8; }
+
+        /* Futuristische HUD hoekmarkeringen */
+        .hud-bracket {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-color: #91a4bf;
+            pointer-events: none;
+            transition: all 0.3s ease;
         }
-        .laser-bar {
+        .bracket-tl { top: 12px; left: 12px; border-top: 2.5px solid; border-left: 2.5px solid; }
+        .bracket-tr { top: 12px; right: 12px; border-top: 2.5px solid; border-right: 2.5px solid; }
+        .bracket-bl { bottom: 12px; left: 12px; border-bottom: 2.5px solid; border-left: 2.5px solid; }
+        .bracket-br { bottom: 12px; right: 12px; border-bottom: 2.5px solid; border-right: 2.5px solid; }
+
+        .group:hover .bracket-tl { top: 8px; left: 8px; border-color: #ffffff; }
+        .group:hover .bracket-tr { top: 8px; right: 8px; border-color: #ffffff; }
+        .group:hover .bracket-bl { bottom: 8px; left: 8px; border-color: #ffffff; }
+        .group:hover .bracket-br { bottom: 8px; right: 8px; border-color: #ffffff; }
+
+        /* Snelle laser scanning animatie */
+        @keyframes hud-laser {
+            0% { top: 4%; opacity: 0.2; }
+            50% { top: 94%; opacity: 1; }
+            100% { top: 4%; opacity: 0.2; }
+        }
+        .hud-laser-beam {
             position: absolute;
             left: 0;
             right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, #38bdf8, #818cf8, transparent);
-            box-shadow: 0 0 16px #38bdf8;
-            animation: scan-laser 2.2s ease-in-out infinite;
+            height: 2.5px;
+            background: linear-gradient(90deg, transparent 5%, #91a4bf 20%, #ffffff 50%, #91a4bf 80%, transparent 95%);
+            box-shadow: 0 0 16px rgba(255, 255, 255, 0.9), 0 0 30px rgba(111, 131, 160, 0.6);
+            animation: hud-laser 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* Holo sheen animatie op gescande kaarten */
+        .holo-card {
+            position: relative;
+            overflow: hidden;
+        }
+        .holo-card::after {
+            content: '';
+            position: absolute;
+            top: -100%;
+            left: -100%;
+            width: 300%;
+            height: 300%;
+            background: linear-gradient(
+                115deg,
+                transparent 30%,
+                rgba(255, 255, 255, 0.06) 45%,
+                rgba(145, 164, 191, 0.16) 50%,
+                transparent 60%
+            );
+            transform: rotate(25deg);
+            animation: holo-pass 4.5s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes holo-pass {
+            0%, 65% { transform: translateY(-100%) rotate(25deg); }
+            100% { transform: translateY(100%) rotate(25deg); }
+        }
+
+        /* Pokéball dot uit het BRIMI merk */
+        .brimi-dot {
+            display: inline-block;
+            position: relative;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            border: 1.5px solid #6f83a0;
+            background: #ffffff;
+            margin-left: 2px;
+            vertical-align: 1px;
+        }
+        .brimi-dot::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: -1px;
+            right: -1px;
+            height: 1.5px;
+            background: #050a14;
+            transform: translateY(-50%);
+        }
+        .brimi-dot::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 3.5px;
+            height: 3.5px;
+            background: #ffffff;
+            border: 1px solid #050a14;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
         }
     </style>
 </head>
-<body class="font-sans antialiased flex flex-col justify-between selection:bg-sky-500 selection:text-white">
+<body class="font-sans antialiased flex flex-col justify-between selection:bg-brimi-slate selection:text-white pb-12">
 
-    <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
-        <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex flex-col">
-                <span class="text-base sm:text-lg font-black tracking-tight text-white uppercase flex items-center gap-2">
-                    Cardmarket Scanner
-                </span>
-                <span class="text-[11px] font-semibold text-slate-400">
-                    powered by <span class="text-sky-400 font-bold tracking-wider">BRIMI</span>
-                </span>
+    <!-- ULTRA-STRAKKE HEADER (GEEN BINDER-TABBLADEN MEER) -->
+    <header class="border-b border-brimi-slate/20 bg-brimi-navy/90 backdrop-blur-xl sticky top-0 z-40">
+        <div class="max-w-2xl mx-auto px-4 py-3.5 flex justify-between items-center">
+            
+            <!-- BRIMI Woordmerk -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-2xl border border-brimi-ring/40 bg-brimi-midnight flex items-center justify-center text-white shadow-inner">
+                    <i class="fa-solid fa-camera-viewfinder text-sm text-brimi-slateLight"></i>
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-baseline">
+                        <span class="text-xl font-black tracking-widest text-white uppercase">BRIMI</span>
+                        <span class="brimi-dot"></span>
+                    </div>
+                    <span class="text-[10px] tracking-widest font-semibold uppercase text-brimi-slate">
+                        Cardmarket Precision Scanner
+                    </span>
+                </div>
             </div>
 
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs shadow-inner">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span class="font-bold text-white flex items-center gap-1.5 text-[11px] sm:text-xs">
-                    <span>🇳🇱</span> Live NL Verkopers Filter
+            <!-- Live NL Indicator badge -->
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brimi-midnight border border-brimi-slate/30 text-xs">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
+                <span class="font-bold text-slate-300 text-[11px] tracking-wide">NL Verkopers</span>
             </div>
+
         </div>
     </header>
 
-    <main class="max-w-5xl mx-auto w-full px-4 py-6 sm:py-10 flex-grow flex flex-col gap-6">
+    <!-- HOOFD-SCANNER VIEWPORT -->
+    <main class="max-w-2xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-6">
 
-        <div class="text-center max-w-2xl mx-auto space-y-3">
-            <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-950/70 border border-sky-800/60 text-xs font-semibold text-sky-300">
-                <i class="fa-solid fa-bolt text-sky-400"></i>
-                <span>Directe Cardmarket marktkoppeling</span>
-            </div>
-            <h1 class="text-2xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
-                Upload een foto. Zie direct wat je kaarten waard zijn.
+        <!-- Korte, krachtige introductie -->
+        <div class="text-center space-y-1.5">
+            <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                Scan je kaart. Check de NL prijs.
             </h1>
-            <p class="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg mx-auto">
-                Bekijk realtime markttrends en open met één klik het actuele Nederlandse Near Mint aanbod op Cardmarket.
+            <p class="text-xs text-slate-400 max-w-md mx-auto">
+                Richt je camera op een Pokémon kaart in sleeve of toploader voor directe Nederlandse Cardmarket-data.
             </p>
         </div>
 
-        <section id="upload-panel" class="w-full max-w-2xl mx-auto">
-            <label for="file-input" id="drop-zone" class="card-glow block border-2 border-dashed border-sky-500/40 hover:border-sky-400 rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-xl active:scale-[0.99]">
+        <!-- DE SCANNER VIEWFINDER (HET CENTRALE ELEMENT) -->
+        <div class="w-full">
+            <label for="file-input" id="drop-zone" class="hud-glass holo-card relative block rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 group border-2 border-dashed border-brimi-slate/30 hover:border-brimi-slate active:scale-[0.99]">
                 <input type="file" id="file-input" class="hidden" accept="image/*">
                 
-                <div id="drop-content" class="flex flex-col items-center justify-center space-y-4 pointer-events-none">
-                    <div class="w-16 h-16 rounded-2xl bg-gradient-to-b from-sky-500/20 to-blue-600/10 border border-sky-500/30 flex items-center justify-center text-sky-400 text-2xl group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                        <i class="fa-solid fa-camera"></i>
+                <!-- HUD Hoekmarkeringen -->
+                <div class="hud-bracket bracket-tl"></div>
+                <div class="hud-bracket bracket-tr"></div>
+                <div class="hud-bracket bracket-bl"></div>
+                <div class="hud-bracket bracket-br"></div>
+
+                <!-- Viewfinder Call-to-Action -->
+                <div id="drop-content" class="flex flex-col items-center justify-center space-y-4 pointer-events-none py-4">
+                    <div class="w-16 h-16 rounded-3xl bg-brimi-midnight border border-brimi-ring/40 flex items-center justify-center text-white text-2xl group-hover:scale-110 group-hover:border-white transition-all duration-300 shadow-xl">
+                        <i class="fa-solid fa-expand text-brimi-slateLight group-hover:text-white transition-colors"></i>
                     </div>
 
                     <div class="space-y-1">
-                        <p class="text-base sm:text-lg font-bold text-white group-hover:text-sky-300 transition-colors">
+                        <p class="text-base font-extrabold text-white">
                             Maak een foto of kies uit bibliotheek
                         </p>
-                        <p class="text-xs text-slate-400 max-w-xs mx-auto">
-                            Herken meerdere kaarten tegelijk, ook in sleeves of toploaders.
+                        <p class="text-xs text-brimi-slate font-medium">
+                            Werkt vlijmscherp met toploaders, sleeves en graded slabs
                         </p>
                     </div>
 
-                    <div class="pt-1">
-                        <span class="inline-flex items-center gap-2 bg-sky-500 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs group-hover:bg-sky-400 transition shadow-lg">
-                            <i class="fa-solid fa-plus"></i>
-                            Selecteer foto
-                        </span>
-                    </div>
+                    <span class="inline-flex items-center gap-2 bg-white text-brimi-navy font-black px-5 py-2.5 rounded-2xl text-xs group-hover:bg-slate-100 transition shadow-lg">
+                        <i class="fa-solid fa-camera"></i>
+                        <span>Start Camera Scanner</span>
+                    </span>
                 </div>
 
-                <div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[380px] bg-black/60 flex items-center justify-center border border-slate-800">
-                    <img id="image-display" src="" alt="Geüploade kaart" class="max-h-[360px] w-auto object-contain rounded-xl">
-                    <div id="laser-effect" class="hidden laser-bar"></div>
+                <!-- Live Foto Preview & Laser -->
+                <div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[340px] bg-black/60 flex items-center justify-center border border-brimi-slate/30">
+                    <img id="image-display" src="" alt="Gescande Pokémon kaart" class="max-h-[320px] w-auto object-contain rounded-xl">
+                    <div id="hud-laser" class="hidden hud-laser-beam"></div>
                 </div>
             </label>
-        </section>
+        </div>
 
-        <section id="scanning-state" class="hidden w-full max-w-xl mx-auto card-glow rounded-2xl p-6 border border-sky-500/30 text-center space-y-4 shadow-2xl">
-            <div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 text-lg mx-auto flex items-center justify-center">
-                <i class="fa-solid fa-spinner fa-spin"></i>
+        <!-- SCANNING PULSE STATUS -->
+        <div id="scanning-state" class="hidden w-full hud-glass rounded-2xl p-5 text-center space-y-3">
+            <div class="flex items-center justify-center gap-3">
+                <i class="fa-solid fa-circle-notch fa-spin text-white text-base"></i>
+                <h3 id="status-title" class="text-xs font-black tracking-wide text-white uppercase">Kaart analyseren...</h3>
+            </div>
+            <p id="status-subtitle" class="text-[11px] text-brimi-slate">Herkenning van serie, setnummer en marktprijzen...</p>
+            <div class="w-full bg-brimi-midnight rounded-full h-1 overflow-hidden">
+                <div id="progress-bar" class="h-full bg-white transition-all duration-300 rounded-full" style="width: 45%"></div>
+            </div>
+        </div>
+
+        <!-- SCANRESULTATEN PANEEL -->
+        <div id="results-panel" class="hidden w-full space-y-4">
+            
+            <div class="flex items-center justify-between px-1">
+                <span class="text-xs font-black tracking-wider uppercase text-brimi-slateLight flex items-center gap-2">
+                    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                    <span>Scan Resultaat</span>
+                </span>
+                <button type="button" id="btn-reset" class="bg-brimi-midnight hover:bg-brimi-surface text-slate-300 text-xs font-semibold px-3 py-1.5 rounded-xl border border-brimi-slate/30 transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Nieuwe Scan
+                </button>
             </div>
 
-            <div class="space-y-1">
-                <h3 id="status-title" class="text-base font-bold text-white">Foto analyseren...</h3>
-                <p id="status-subtitle" class="text-xs text-slate-400">Het AI-brein bekijkt alle kaarten op de foto...</p>
+            <!-- Dynamische Kaart container -->
+            <div id="cards-container" class="space-y-4"></div>
+
+        </div>
+
+        <!-- DE 3 REDENEN WAAROM (KORT, KRACHTIG, GEEN AI-JARGON) -->
+        <div class="pt-6 border-t border-brimi-slate/15 space-y-3">
+            <div class="text-center">
+                <h3 class="text-xs font-black uppercase tracking-widest text-brimi-slate">Waarom BRIMI Scanner?</h3>
             </div>
 
-            <div class="grid grid-cols-3 gap-2 text-[11px] font-medium text-slate-500 pt-1">
-                <div id="step-1" class="p-2 rounded-lg bg-slate-900 border border-slate-800">1. Foto scannen</div>
-                <div id="step-2" class="p-2 rounded-lg bg-slate-900 border border-slate-800">2. Kaarten herkennen</div>
-                <div id="step-3" class="p-2 rounded-lg bg-slate-900 border border-slate-800">3. Cardmarket API</div>
-            </div>
-
-            <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
-                <div id="progress-indicator" class="h-full bg-sky-400 transition-all duration-300 rounded-full" style="width: 25%"></div>
-            </div>
-        </section>
-
-        <section id="results-panel" class="hidden w-full space-y-5">
-            <div class="card-glow rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 border-l-4 border-l-sky-400 shadow-xl">
-                <div class="space-y-1">
-                    <div class="flex items-center gap-2">
-                        <h2 class="text-xl sm:text-2xl font-black text-white" id="results-count">Kaarten Gevonden</h2>
-                        <span class="text-xs bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/20" id="source-badge">Cardmarket Live</span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                
+                <!-- Reden 1: Echte NL Prijzen -->
+                <div class="hud-glass rounded-2xl p-4 space-y-2 border border-brimi-slate/20">
+                    <div class="w-7 h-7 rounded-xl bg-brimi-midnight border border-brimi-ring/40 text-white flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-flag"></i>
                     </div>
-                    <p class="text-xs text-slate-400">Gekoppeld aan actuele marktdata en Cardmarket statistics</p>
+                    <h4 class="text-xs font-black text-white">Direct Nederlandse Prijzen</h4>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                        Geen buitenlandse verzendkosten. Je ziet direct wat Nederlandse aanbieders op Cardmarket vragen.
+                    </p>
                 </div>
 
-                <div class="flex items-center gap-4">
-                    <div class="text-right">
-                        <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Totale NL Waarde</span>
-                        <span class="text-2xl sm:text-3xl font-black text-amber-300 font-mono" id="total-val-display">€ 0.00</span>
+                <!-- Reden 2: Toploaders & Sleeves -->
+                <div class="hud-glass rounded-2xl p-4 space-y-2 border border-brimi-slate/20">
+                    <div class="w-7 h-7 rounded-xl bg-brimi-midnight border border-brimi-ring/40 text-emerald-400 flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-shield-halved"></i>
                     </div>
-                    <button type="button" id="btn-reset" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-700 transition flex items-center gap-2 shadow active:scale-95 cursor-pointer">
-                        <i class="fa-solid fa-arrow-rotate-left"></i> Opnieuw
-                    </button>
+                    <h4 class="text-xs font-black text-white">Werkt Door Toploaders</h4>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                        Haal je kaart nooit uit de sleeve. De scanner herkent de kaart en conditie gewoon door het plastic heen.
+                    </p>
                 </div>
-            </div>
 
-            <div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <!-- Dynamisch gevuld -->
+                <!-- Reden 3: Eén Tik Deelknop -->
+                <div class="hud-glass rounded-2xl p-4 space-y-2 border border-brimi-slate/20">
+                    <div class="w-7 h-7 rounded-xl bg-brimi-midnight border border-brimi-ring/40 text-emerald-400 flex items-center justify-center text-xs">
+                        <i class="fa-brands fa-whatsapp"></i>
+                    </div>
+                    <h4 class="text-xs font-black text-white">1-Tik WhatsApp Deelknop</h4>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                        Verse pull gescoord? Slinger hem met één druk op de knop compleet met foto en waarde in je vriendengroep.
+                    </p>
+                </div>
+
             </div>
-        </section>
+        </div>
 
     </main>
 
-    <div id="notification-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div class="card-glow max-w-sm w-full rounded-2xl p-6 border border-slate-700 text-center space-y-4 shadow-2xl">
-            <div class="w-12 h-12 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto text-xl">
+    <!-- SNELLE PRIJSAANPASSING MODAL -->
+    <div id="price-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div class="hud-glass max-w-xs w-full rounded-2xl p-5 text-center space-y-4 shadow-2xl border border-brimi-slate/40">
+            <div class="space-y-1">
+                <h4 class="text-sm font-black text-white">Pas Prijs Aan</h4>
+                <p class="text-[11px] text-slate-400" id="price-modal-card-name">Wat is de prijs op Cardmarket?</p>
+            </div>
+
+            <div class="relative">
+                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold font-mono">€</span>
+                <input type="number" step="0.05" id="custom-price-input" class="w-full bg-brimi-midnight border border-brimi-slate/40 focus:border-white rounded-xl py-2.5 pl-8 pr-3 text-white font-mono font-bold text-lg text-center outline-none">
+            </div>
+
+            <div class="flex gap-2">
+                <button type="button" id="btn-cancel-price" class="flex-1 bg-brimi-midnight hover:bg-brimi-surface text-slate-300 font-semibold py-2 rounded-xl text-xs transition cursor-pointer border border-brimi-slate/20">
+                    Annuleren
+                </button>
+                <button type="button" id="btn-save-price" class="flex-1 bg-white hover:bg-slate-100 text-brimi-navy font-black py-2 rounded-xl text-xs transition cursor-pointer">
+                    Opslaan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICATIE MODAL -->
+    <div id="notify-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div class="hud-glass max-w-sm w-full rounded-2xl p-6 text-center space-y-4 shadow-2xl border border-brimi-slate/40">
+            <div class="w-10 h-10 rounded-full bg-brimi-midnight border border-brimi-ring/40 text-amber-400 flex items-center justify-center mx-auto text-base">
                 <i class="fa-solid fa-circle-exclamation"></i>
             </div>
             <div class="space-y-1">
-                <h4 id="modal-title" class="text-base font-bold text-white">Bericht</h4>
-                <p id="modal-desc" class="text-xs text-slate-300 leading-relaxed"></p>
+                <h4 id="notify-title" class="text-sm font-bold text-white">Bericht</h4>
+                <p id="notify-desc" class="text-xs text-slate-300 leading-relaxed"></p>
             </div>
-            <button type="button" id="modal-close" class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer">
+            <button type="button" id="notify-close" class="w-full bg-white hover:bg-slate-100 text-brimi-navy font-bold py-2.5 rounded-xl text-xs transition cursor-pointer">
                 Begrepen
             </button>
         </div>
     </div>
 
-    <footer class="border-t border-slate-900 py-4 text-center text-xs text-slate-500">
-        <p class="font-medium">Cardmarket Scanner • powered by <strong class="text-slate-300">BRIMI</strong></p>
-    </footer>
-
     <script>
-        const BACKEND_API_BASE_URL = "https://brimi-scanner.onrender.com";
+        const BACKEND_URL = "https://brimi-scanner.onrender.com";
 
+        // View elements
         const fileInput = document.getElementById('file-input');
         const dropContent = document.getElementById('drop-content');
         const previewWrapper = document.getElementById('preview-wrapper');
         const imageDisplay = document.getElementById('image-display');
-        const laserEffect = document.getElementById('laser-effect');
-        
+        const hudLaser = document.getElementById('hud-laser');
         const scanningState = document.getElementById('scanning-state');
         const resultsPanel = document.getElementById('results-panel');
         const cardsContainer = document.getElementById('cards-container');
-        
         const statusTitle = document.getElementById('status-title');
         const statusSubtitle = document.getElementById('status-subtitle');
-        const progressIndicator = document.getElementById('progress-indicator');
-        const resultsCount = document.getElementById('results-count');
-        const totalValDisplay = document.getElementById('total-val-display');
+        const progressBar = document.getElementById('progress-bar');
         const btnReset = document.getElementById('btn-reset');
 
-        const notificationModal = document.getElementById('notification-modal');
-        const modalTitle = document.getElementById('modal-title');
-        const modalDesc = document.getElementById('modal-desc');
-        const modalClose = document.getElementById('modal-close');
+        // Modals
+        const notifyModal = document.getElementById('notify-modal');
+        const notifyTitle = document.getElementById('notify-title');
+        const notifyDesc = document.getElementById('notify-desc');
+        const notifyClose = document.getElementById('notify-close');
+        const priceModal = document.getElementById('price-modal');
+        const priceModalCardName = document.getElementById('price-modal-card-name');
+        const customPriceInput = document.getElementById('custom-price-input');
+        const btnCancelPrice = document.getElementById('btn-cancel-price');
+        const btnSavePrice = document.getElementById('btn-save-price');
 
-        let currentCardsData = [];
+        let lastScannedCards = [];
+        let editingIndex = null;
+
+        function playChime() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880.00, ctx.currentTime + 0.14);
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.35);
+            } catch(e) {}
+        }
+
+        function triggerHaptic() {
+            if (navigator.vibrate) navigator.vibrate(35);
+        }
 
         function showNotification(title, message) {
-            modalTitle.textContent = title;
-            modalDesc.textContent = message;
-            notificationModal.classList.remove('hidden');
+            notifyTitle.textContent = title;
+            notifyDesc.textContent = message;
+            notifyModal.classList.remove('hidden');
         }
+        notifyClose.addEventListener('click', () => notifyModal.classList.add('hidden'));
 
-        modalClose.addEventListener('click', () => {
-            notificationModal.classList.add('hidden');
-        });
-
-        btnReset.addEventListener('click', () => {
-            resetScanner();
-        });
-
+        // FOTO UPLOAD & DIRECTE CANVAS COMPRESSIE (MAX 850PX VOOR SNELHEID)
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
-                processSelectedFile(e.target.files[0]);
+                const file = e.target.files[0];
+                if (!file.type.startsWith('image/')) {
+                    showNotification('Ongeldig bestand', 'Selecteer een duidelijke foto van je Pokémon kaart.');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width;
+                        let h = img.height;
+                        const maxDim = 850;
+
+                        if (w > maxDim || h > maxDim) {
+                            if (w > h) {
+                                h = Math.round((h * maxDim) / w);
+                                w = maxDim;
+                            } else {
+                                w = Math.round((w * maxDim) / h);
+                                h = maxDim;
+                            }
+                        }
+
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+
+                        const compressed = canvas.toDataURL('image/jpeg', 0.82);
+                        imageDisplay.src = compressed;
+                        const base64Data = compressed.split(',')[1];
+
+                        dropContent.classList.add('hidden');
+                        previewWrapper.classList.remove('hidden');
+                        hudLaser.classList.remove('hidden');
+
+                        executeScan(base64Data);
+                    };
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
             }
         });
 
-        function processSelectedFile(file) {
-            if (!file.type.startsWith('image/')) {
-                showNotification('Ongeldig bestand', 'Selecteer een duidelijke afbeelding van je Pokémon kaart(en).');
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const maxDim = 900;
-
-                    if (width > maxDim || height > maxDim) {
-                        if (width > height) {
-                            height = Math.round((height * maxDim) / width);
-                            width = maxDim;
-                        } else {
-                            width = Math.round((width * maxDim) / height);
-                            height = maxDim;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.80);
-                    imageDisplay.src = compressedBase64;
-                    const rawBase64 = compressedBase64.split(',')[1];
-
-                    dropContent.classList.add('hidden');
-                    previewWrapper.classList.remove('hidden');
-                    laserEffect.classList.remove('hidden');
-
-                    executeCardAnalysis(rawBase64, 'image/jpeg');
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function setScanStep(step, title, subtitle, pct) {
-            statusTitle.textContent = title;
-            statusSubtitle.textContent = subtitle;
-            progressIndicator.style.width = pct + '%';
-
-            for (let i = 1; i <= 3; i++) {
-                const el = document.getElementById(`step-${i}`);
-                if (!el) continue;
-                if (i <= step) {
-                    el.classList.add('border-sky-400', 'text-sky-300', 'bg-slate-800');
-                    el.classList.remove('text-slate-500');
-                } else {
-                    el.classList.remove('border-sky-400', 'text-sky-300', 'bg-slate-800');
-                    el.classList.add('text-slate-500');
-                }
-            }
-        }
-
-        async function executeCardAnalysis(base64Data, mimeType) {
+        async function executeScan(base64Data) {
             scanningState.classList.remove('hidden');
             resultsPanel.classList.add('hidden');
             cardsContainer.innerHTML = '';
 
-            setScanStep(1, "Foto inspecteren...", "Afbeelding naar het BRIMI brein verzenden...", 35);
+            statusTitle.textContent = "Analyseren...";
+            statusSubtitle.textContent = "AI leest setnummer & zoekt Nederlandse Cardmarket prijzen...";
+            progressBar.style.width = "40%";
 
             try {
-                setTimeout(() => setScanStep(2, "Kaarten identificeren...", "AI herkent taal, nummers en series...", 70), 1000);
-                setTimeout(() => setScanStep(3, "Cardmarket data ophalen...", "Officiële prijzen koppelen via TCGdex...", 90), 2000);
+                setTimeout(() => { progressBar.style.width = "80%"; }, 900);
 
-                const response = await fetch(`${BACKEND_API_BASE_URL}/api/scan`, {
+                const response = await fetch(`${BACKEND_URL}/api/scan`, {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         image_base64: base64Data,
-                        mime_type: mimeType || "image/jpeg"
+                        mime_type: 'image/jpeg'
                     })
                 });
 
                 if (!response.ok) {
-                    const errData = await response.json().catch(() => ({}));
-                    const detailMsg = errData.detail || `Server status ${response.status}`;
-                    throw new Error(detailMsg);
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.detail || `Server fout (HTTP ${response.status})`);
                 }
 
                 const cards = await response.json();
                 if (!cards || cards.length === 0) {
-                    throw new Error("Geen Pokémon kaarten herkend op deze foto. Zorg voor goed licht en scherpe letters.");
+                    throw new Error("Geen Pokémon kaart herkend. Zorg voor voldoende licht.");
                 }
 
-                currentCardsData = cards;
-                renderResults(currentCardsData);
+                lastScannedCards = cards;
+                playChime();
+                triggerHaptic();
+                renderResults(lastScannedCards);
 
             } catch (err) {
                 console.error("Scan error:", err);
-                showNotification("Scan Probleem", err.message || "Er ging iets mis bij het scannen. Probeer het opnieuw.");
+                showNotification("Scan Probleem", err.message || "Er ging iets mis tijdens de scan.");
                 resetScanner();
             } finally {
-                laserEffect.classList.add('hidden');
+                hudLaser.classList.add('hidden');
                 scanningState.classList.add('hidden');
             }
         }
 
-        function getLanguageFlag(langCode) {
-            const code = (langCode || 'EN').toUpperCase();
-            if (code === 'EN') return '🇬🇧';
-            if (code === 'JP') return '🇯🇵';
-            if (code === 'CN' || code === 'ZH') return '🇨🇳';
-            if (code === 'DE') return '🇩🇪';
-            if (code === 'FR') return '🇫🇷';
+        function getFlag(code) {
+            const c = (code || 'EN').toUpperCase();
+            if (c === 'EN') return '🇬🇧';
+            if (c === 'JP') return '🇯🇵';
+            if (c === 'CN' || c === 'ZH') return '🇨🇳';
             return '🌐';
         }
 
         function renderResults(cards) {
             resultsPanel.classList.remove('hidden');
-            resultsCount.textContent = `${cards.length} ${cards.length === 1 ? 'Kaart' : 'Kaarten'} Gevonden`;
-            
-            let totalValue = 0;
             cardsContainer.innerHTML = '';
 
-            cards.forEach((card) => {
-                const nlPrice = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 2.50;
-                const euFrom = typeof card.europeFromEUR === 'number' ? card.europeFromEUR : (nlPrice * 0.85);
-                const trend = typeof card.priceTrendEUR === 'number' ? card.priceTrendEUR : nlPrice;
-                const avg30 = typeof card.avg30DaysEUR === 'number' ? card.avg30DaysEUR : (nlPrice * 1.05);
-                
-                totalValue += nlPrice;
+            cards.forEach((card, idx) => {
+                const price = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 3.00;
+                const flag = getFlag(card.languageCode);
+                const isChinese = card.isChinese || (card.languageCode === 'CN');
+                const actionText = isChinese ? "Check eBay Sold Listings" : "Bekijk Aanbieders op Cardmarket";
 
-                const flag = getLanguageFlag(card.languageCode);
-                const isChinese = (card.languageCode === 'CN' || (card.language || '').toLowerCase().includes('chinees'));
-                const actionButtonText = isChinese ? "Bekijk Recent Verkocht op eBay" : "Bekijk Actuele NL Verkopers (Cardmarket)";
+                const cardBox = document.createElement('div');
+                cardBox.className = "hud-glass rounded-3xl p-5 sm:p-6 space-y-4 border border-brimi-slate/30 shadow-2xl";
 
-                const cardItem = document.createElement('div');
-                cardItem.className = "card-glow rounded-2xl p-5 sm:p-6 transition-all duration-300 flex flex-col justify-between space-y-4 shadow-xl relative overflow-hidden";
-
-                cardItem.innerHTML = `
-                    <div class="space-y-4">
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <div class="flex flex-wrap items-center gap-1.5 mb-1.5 text-xs font-semibold">
-                                    <span class="bg-slate-900 text-sky-300 px-2 py-0.5 rounded border border-slate-800 font-mono">
-                                        ${card.setCode || 'SET'} ${card.cardNumber || ''}${card.setTotal ? '/' + card.setTotal : ''}
-                                    </span>
-                                    <span class="bg-slate-900 text-slate-300 px-2 py-0.5 rounded border border-slate-800 flex items-center gap-1">
-                                        <span>${flag}</span>
-                                        <span>${card.language || 'Engels'}</span>
-                                    </span>
-                                    <span class="bg-slate-900 text-amber-300 px-2 py-0.5 rounded border border-slate-800 text-[10px]">
-                                        ${card.priceSource || 'Cardmarket API'}
-                                    </span>
-                                </div>
-                                <h3 class="text-xl sm:text-2xl font-black text-white">${card.cardName}</h3>
-                                <p class="text-xs text-slate-400">${card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
-                            </div>
-                            <div class="text-right shrink-0">
-                                <span class="text-[10px] text-slate-400 block uppercase font-bold">${isChinese ? 'Marktwaarde' : 'NL Richtprijs (NM)'}</span>
-                                <span class="text-2xl font-black text-amber-300 font-mono">€ ${nlPrice.toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-3 gap-2 text-center">
-                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                                <span class="text-[10px] font-bold text-slate-400 block uppercase">Europa Vanaf</span>
-                                <span class="text-sm font-extrabold text-slate-300 font-mono">€ ${euFrom.toFixed(2)}</span>
-                            </div>
-                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                                <span class="text-[10px] font-bold text-slate-400 block uppercase">Markttrend</span>
-                                <span class="text-sm font-extrabold text-emerald-400 font-mono">€ ${trend.toFixed(2)}</span>
-                            </div>
-                            <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                                <span class="text-[10px] font-bold text-slate-400 block uppercase">30d Gem.</span>
-                                <span class="text-sm font-extrabold text-slate-400 font-mono">€ ${avg30.toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                        <div class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs text-slate-300 font-medium">Conditie:</span>
-                                <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                    ${card.condition || 'Near Mint (NM)'}
+                cardBox.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="space-y-1">
+                            <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
+                                <span class="bg-brimi-midnight text-brimi-slateLight px-2 py-0.5 rounded-lg border border-brimi-slate/30 font-mono">
+                                    ${card.setCode || 'SET'} ${card.cardNumber || ''}${card.setTotal ? '/' + card.setTotal : ''}
+                                </span>
+                                <span class="bg-brimi-midnight text-slate-300 px-2 py-0.5 rounded-lg border border-brimi-slate/30 flex items-center gap-1">
+                                    <span>${flag}</span>
+                                    <span>${card.language || 'Engels'}</span>
                                 </span>
                             </div>
-                            <p class="text-xs text-slate-400 leading-relaxed">
-                                ${card.conditionReason || 'In nette staat met scherpe hoeken en nette randen.'}
-                            </p>
+                            <h2 class="text-xl font-black text-white tracking-tight">${card.cardName}</h2>
+                            <p class="text-xs text-brimi-slate font-medium">${card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
+                        </div>
+
+                        <div class="text-right shrink-0">
+                            <span class="text-[10px] text-brimi-slate uppercase font-bold tracking-wider block">NL Richtprijs</span>
+                            <button type="button" onclick="openPriceModal(${idx})" class="group flex items-center gap-1.5 bg-brimi-midnight hover:bg-brimi-surface border border-brimi-slate/40 px-3 py-1.5 rounded-2xl transition cursor-pointer shadow-inner">
+                                <span id="price-tag-${idx}" class="text-xl font-black text-brimi-gold font-mono">€ ${price.toFixed(2)}</span>
+                                <i class="fa-solid fa-pen text-[10px] text-brimi-slate group-hover:text-white transition"></i>
+                            </button>
+                            <span class="text-[9px] text-slate-500 block mt-0.5">Tik om aan te passen</span>
                         </div>
                     </div>
 
-                    <div class="pt-1">
+                    <div class="bg-brimi-midnight/90 rounded-2xl p-3 border border-brimi-slate/20 flex items-center justify-between text-xs">
+                        <span class="text-slate-400 font-medium">Staat van de kaart:</span>
+                        <span class="font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                            ${card.condition || 'Near Mint (NM)'}
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         <a href="${card.directCardmarketUrl}" target="_blank" rel="noopener noreferrer" 
-                           class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-lg text-xs sm:text-sm">
-                            <span>${actionButtonText}</span>
-                            <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                           class="bg-white hover:bg-slate-100 text-brimi-navy font-black py-3 px-4 rounded-2xl transition flex items-center justify-center gap-2 text-xs shadow-lg">
+                            <span>${actionText}</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                         </a>
+
+                        <button type="button" onclick="shareCardToWhatsApp(${idx})" 
+                                class="bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 px-4 rounded-2xl transition flex items-center justify-center gap-2 text-xs shadow-lg cursor-pointer">
+                            <i class="fa-brands fa-whatsapp text-sm"></i>
+                            <span>Deel in WhatsApp Groep</span>
+                        </button>
                     </div>
                 `;
 
-                cardsContainer.appendChild(cardItem);
+                cardsContainer.appendChild(cardBox);
             });
-
-            totalValDisplay.textContent = `€ ${totalValue.toFixed(2)}`;
         }
+
+        // PRIJS AANPASSEN
+        window.openPriceModal = function(idx) {
+            editingIndex = idx;
+            const card = lastScannedCards[idx];
+            priceModalCardName.textContent = `Wat is de prijs voor ${card.cardName}?`;
+            customPriceInput.value = (card.estimatedPriceEUR || 3.00).toFixed(2);
+            priceModal.classList.remove('hidden');
+            customPriceInput.focus();
+        };
+
+        btnCancelPrice.addEventListener('click', () => priceModal.classList.add('hidden'));
+
+        btnSavePrice.addEventListener('click', () => {
+            const val = parseFloat(customPriceInput.value);
+            if (!isNaN(val) && val >= 0 && editingIndex !== null) {
+                lastScannedCards[editingIndex].estimatedPriceEUR = val;
+                const el = document.getElementById(`price-tag-${editingIndex}`);
+                if (el) el.textContent = `€ ${val.toFixed(2)}`;
+                priceModal.classList.add('hidden');
+                triggerHaptic();
+            }
+        });
+
+        // 1-TIK WHATSAPP DELEN
+        window.shareCardToWhatsApp = function(idx) {
+            const c = lastScannedCards[idx];
+            if (!c) return;
+
+            triggerHaptic();
+            const flag = getFlag(c.languageCode);
+            const price = (typeof c.estimatedPriceEUR === 'number' ? c.estimatedPriceEUR : 3.00).toFixed(2);
+
+            let text = `🔥 *NIEUWE PULL VIA BRIMI!* 🔥\n\n`;
+            text += `🃏 *${c.cardName}*\n`;
+            text += `📍 *Set:* ${c.setCode || ''} ${c.cardNumber || ''}${c.setTotal ? '/' + c.setTotal : ''} (${c.setName || 'Reeks'})\n`;
+            text += `🌐 *Taal:* ${flag} ${c.language || 'Engels'}\n`;
+            text += `✨ *Staat:* ${c.condition || 'Near Mint'}\n`;
+            text += `💶 *NL Waarde:* € ${price}\n`;
+            if (c.directCardmarketUrl) {
+                text += `🔗 *Link:* ${c.directCardmarketUrl}\n`;
+            }
+            text += `\n_Gescand met Cardmarket Scanner powered by BRIMI ⚡️_`;
+
+            window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+        };
+
+        btnReset.addEventListener('click', resetScanner);
 
         function resetScanner() {
             resultsPanel.classList.add('hidden');
             scanningState.classList.add('hidden');
             dropContent.classList.remove('hidden');
             previewWrapper.classList.add('hidden');
-            laserEffect.classList.add('hidden');
-            
+            hudLaser.classList.add('hidden');
             imageDisplay.src = '';
             fileInput.value = '';
-            currentCardsData = [];
+            lastScannedCards = [];
         }
     </script>
 </body>
