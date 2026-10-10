@@ -7,14 +7,15 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
 import httpx
+from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(
     title="BRIMI Turbo Scanner Engine",
-    description="Pokémon kaartdetectie met Cardmarket NL voor singles en PriceCharting voor graded slabs.",
-    version="6.7.0"
+    description="Pokémon kaartdetectie met Cardmarket NL voor singles en live PriceCharting voor graded slabs.",
+    version="6.8.0"
 )
 
 app.add_middleware(
@@ -36,7 +37,7 @@ class ScanRequest(BaseModel):
     mime_type: Optional[str] = "image/jpeg"
 
 def clean_card_number(raw_num: str) -> str:
-    """Haalt het basisnummer op (bijv. '097' uit '097/094')."""
+    """Haalt het basisnummer op (bijv. '230' uit '230/236')."""
     if not raw_num:
         return ""
     main_num = str(raw_num).split("/")[0].strip()
@@ -48,8 +49,8 @@ def get_base_cardmarket_url(card_name: str, card_number: str) -> str:
     query = f"{card_name} {clean_num}".strip()
     return f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(query)}&sellerCountry=17&minCondition=2"
 
-def get_pricecharting_url(card_name: str, card_number: str) -> str:
-    """PriceCharting link met koershistorie voor ungraded en graded (PSA 9, PSA 10, etc.)."""
+def get_pricecharting_search_url(card_name: str, card_number: str) -> str:
+    """PriceCharting link met koershistorie."""
     clean_num = clean_card_number(card_number)
     query = f"pokemon {card_name} {clean_num}".strip()
     return f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(query)}&type=prices"
@@ -61,8 +62,101 @@ def get_ebay_sold_url(card_name: str, card_number: str, slab_info: Optional[str]
         query = f"{slab_info} {query}"
     return f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(query.strip())}&LH_Sold=1&LH_Complete=1"
 
+async def fetch_live_pricecharting_price(card_name: str, card_number: str, grade_str: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Haalt realtime de exacte veilingprijzen (Grade 8, Grade 9, PSA 10, etc.) van PriceCharting op."""
+    clean_num = clean_card_number(card_number)
+    query = f"pokemon {card_name} {clean_num}".strip()
+    search_url = f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(query)}&type=prices"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,nl;q=0.8"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=4.5, follow_redirects=True, headers=headers) as client:
+            resp = await client.get(search_url)
+            if resp.status_code != 200:
+                return None
+
+            target_html = resp.text
+            final_url = str(resp.url)
+
+            # Indien search overview, open het eerste relevante product
+            if "search-products" in final_url:
+                soup = BeautifulSoup(target_html, "html.parser")
+                link = soup.select_one("td.title a") or soup.select_one("a[href*='/game/pokemon-']")
+                if link and link.get("href"):
+                    product_href = link["href"]
+                    final_url = urllib.parse.urljoin("https://www.pricecharting.com", product_href)
+                    p_resp = await client.get(final_url)
+                    if p_resp.status_code == 200:
+                        target_html = p_resp.text
+
+            soup = BeautifulSoup(target_html, "html.parser")
+            g_raw = (grade_str or "9").lower().replace("psa", "").replace("cgc", "").replace("bgs", "").strip()
+
+            def to_float(txt: str) -> Optional[float]:
+                if not txt: return None
+                nums = re.findall(r"[\d\.]+", txt.replace(",", ""))
+                return float(nums[0]) if nums else None
+
+            # 1. Check specifieke PriceCharting table cell IDs
+            grade_id_map = {
+                "10": ["manual_only_price", "psa10_price", "bgs10_price"],
+                "9.5": ["box_only_price", "grade95_price"],
+                "9": ["grade9_price"],
+                "8": ["grade8_price"],
+                "7": ["grade7_price", "cib_price"],
+                "ungraded": ["ungraded_price", "loose_price"]
+            }
+
+            key = "9"
+            if "10" in g_raw: key = "10"
+            elif "9.5" in g_raw: key = "9.5"
+            elif "8" in g_raw: key = "8"
+            elif "7" in g_raw: key = "7"
+
+            found_usd = None
+            for cell_id in grade_id_map.get(key, []):
+                el = soup.find(id=cell_id)
+                if el:
+                    val = to_float(el.get_text())
+                    if val and val > 0:
+                        found_usd = val
+                        break
+
+            # 2. Regex fallback over tekst als cell ID afwijkt
+            if not found_usd:
+                patterns = [
+                    rf"(?:Grade\s*{re.escape(key)}|PSA\s*{re.escape(key)})\s*[:\s]*\$([0-9\.,]+)",
+                    rf"\$([0-9\.,]+)\s*(?:Grade\s*{re.escape(key)}|PSA\s*{re.escape(key)})"
+                ]
+                for p in patterns:
+                    m = re.search(p, target_html, re.I)
+                    if m:
+                        val = to_float(m.group(1))
+                        if val and val > 0:
+                            found_usd = val
+                            break
+
+            if found_usd and found_usd > 0:
+                # Koersconversie USD naar EUR (ca. 0.92)
+                eur = round(found_usd * 0.92, 2)
+                return {
+                    "price_eur": eur,
+                    "price_usd": found_usd,
+                    "url": final_url,
+                    "grade_label": f"Grade {key}"
+                }
+    except Exception:
+        pass
+
+    return None
+
 async def get_working_gemini_models(api_key: str) -> List[str]:
-    """Haalt dynamisch beschikbare modellen op die generateContent ondersteunen."""
+    """Haalt dynamisch beschikbare modellen op."""
     global MODELS_CACHE, MODELS_CACHE_TIME
     now = datetime.now()
     if MODELS_CACHE and MODELS_CACHE_TIME and (now - MODELS_CACHE_TIME < timedelta(hours=1)):
@@ -107,7 +201,7 @@ async def resolve_card_price(
     grading_company: Optional[str] = None,
     grade: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Prijsresolutie: PriceCharting voor slabs, eBay voor Chinees, Cardmarket NL voor raw singles."""
+    """Prijsresolutie: Live PriceCharting voor slabs, eBay voor Chinees, Cardmarket NL voor raw singles."""
     clean_num = clean_card_number(card_number)
     slab_id = f"{grading_company}_{grade}".lower() if is_graded else "raw"
     cache_key = f"{card_name.lower()}_{clean_num}_{language_code}_{slab_id}".strip()
@@ -116,21 +210,34 @@ async def resolve_card_price(
     if cache_key in PRICE_CACHE and (now - PRICE_CACHE[cache_key]["time"] < CACHE_TTL):
         return PRICE_CACHE[cache_key]["data"]
 
-    # 1. Gecertificeerde Graded Slabs (PSA / CGC / BGS / etc.)
+    # 1. Gecertificeerde Graded Slabs: LIVE PriceCharting scraper
     if is_graded:
-        pc_url = get_pricecharting_url(card_name, card_number)
+        pc_live = await fetch_live_pricecharting_price(card_name, card_number, grade)
+        default_pc_url = get_pricecharting_search_url(card_name, card_number)
         label = f"{grading_company or 'Slab'} {grade or ''}".strip()
-        data = {
-            "price_eur": round(max(ai_estimate, 10.0), 2),
-            "url": pc_url,
-            "source": f"PriceCharting ({label})",
-            "is_graded": True,
-            "is_chinese": False
-        }
+
+        if pc_live and pc_live.get("price_eur"):
+            real_price = pc_live["price_eur"]
+            data = {
+                "price_eur": real_price,
+                "url": pc_live.get("url") or default_pc_url,
+                "source": f"PriceCharting Live (${pc_live.get('price_usd'):.2f})",
+                "is_graded": True,
+                "is_chinese": False
+            }
+        else:
+            data = {
+                "price_eur": round(max(ai_estimate, 12.0), 2),
+                "url": default_pc_url,
+                "source": f"PriceCharting ({label})",
+                "is_graded": True,
+                "is_chinese": False
+            }
+
         PRICE_CACHE[cache_key] = {"time": now, "data": data}
         return data
 
-    # 2. Chinese kaarten (niet op Cardmarket)
+    # 2. Chinese kaarten
     is_chinese = (language_code.upper() in ["CN", "ZH", "CHINESE"]) or ("chinees" in language_code.lower())
     if is_chinese:
         ebay_url = get_ebay_sold_url(card_name, card_number)
@@ -144,7 +251,7 @@ async def resolve_card_price(
         PRICE_CACHE[cache_key] = {"time": now, "data": data}
         return data
 
-    # 3. Reguliere Singles (Cardmarket NL)
+    # 3. Reguliere Singles (Cardmarket NL via TCGdex)
     cm_url = get_base_cardmarket_url(card_name, card_number)
     resolved_price = round(max(ai_estimate, 1.50), 2)
     source = "Cardmarket NL Richtprijs"
@@ -183,7 +290,7 @@ async def resolve_card_price(
 
 @app.get("/")
 def ping():
-    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.7.0"}
+    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "6.8.0"}
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
@@ -193,37 +300,37 @@ async def scan_cards(payload: ScanRequest):
 
     prompt = """
 Analyseer deze Pokémon kaartfoto direct:
-1. Naam: officiële Pokémon naam (bijv. Dewgong, Misty's Vitality, Leafeon ex, Alolan Exeggutor).
-2. Nummer: cijfers vóór de streep (bijv. '097' uit '097/094').
-3. Totaal: cijfers na de streep (bijv. '094').
-4. Setcode: letters linksonder (bijv. PBL, PFL, ME05, SVE).
-5. Setnaam: herken de reeks (bijv. Pitch Black, Phantasmal Flames, Surging Sparks).
-6. Taal: Chinees indien vereenvoudigde karakters (taalCode: 'CN'), Japans ('JP') of Engels ('EN').
-7. Graded Slab: Check of de kaart in een gecertificeerde slab zit (bijv. PSA, BGS/Beckett, CGC, PCA, AP Grading).
+1. Naam: officiële Pokémon naam (bijv. Naganadel GX, Dewgong, Misty's Vitality).
+2. Nummer: cijfers vóór de streep (bijv. '230' uit '230/236').
+3. Totaal: cijfers na de streep (bijv. '236').
+4. Setcode: letters linksonder (bijv. SM11, PBL, PFL, ME05).
+5. Setnaam: herken de reeks (bijv. Unified Minds, Pitch Black).
+6. Taal: Chinees indien vereenvoudigde karakters ('CN'), Japans ('JP') of Engels ('EN').
+7. Graded Slab: Check of de kaart in een gecertificeerde slab zit (bijv. PSA, BGS, CGC).
    - isGraded: true/false
-   - gradingCompany: "PSA", "BGS", "CGC", "PCA" of null
+   - gradingCompany: "PSA", "BGS", "CGC" of null
    - grade: bijv. "10", "9.5", "9", "8" of null
-8. Conditie: Indien graded geef de volledige omschrijving (bijv. "PSA 10 Gem Mint"). Indien raw, kies uit: "Near Mint (NM)", "Light Played (LP)", "Good (GD)".
+8. Conditie: Indien graded geef de volledige omschrijving (bijv. "PSA 9 Mint"). Indien raw, kies uit: "Near Mint (NM)", "Light Played (LP)", "Good (GD)".
 9. Reële marktwaarde in euro:
    - Indien RAW: schat de Nederlandse Cardmarket marktwaarde.
-   - Indien GRADED SLAB: schat de werkelijke PriceCharting / eBay Sold veilingwaarde specifiek voor deze grader en grade (bijv. PSA 10 ligt vaak aanzienlijk hoger dan raw).
+   - Indien GRADED SLAB: schat de werkelijke PriceCharting veilingwaarde specifiek voor deze grade.
 
 JSON Formaat:
 [
   {
     "cardName": "Naam",
-    "cardNumber": "097",
-    "setTotal": "094",
-    "setCode": "PBL",
-    "setName": "Pitch Black",
+    "cardNumber": "230",
+    "setTotal": "236",
+    "setCode": "SM11",
+    "setName": "Unified Minds",
     "language": "Engels",
     "languageCode": "EN",
-    "rarity": "Illustration Rare",
-    "isGraded": false,
-    "gradingCompany": null,
-    "grade": null,
-    "condition": "Near Mint (NM)",
-    "marketEstimateEUR": 4.20
+    "rarity": "Secret Rare",
+    "isGraded": true,
+    "gradingCompany": "PSA",
+    "grade": "9",
+    "condition": "PSA 9 Mint",
+    "marketEstimateEUR": 15.00
   }
 ]
 """
