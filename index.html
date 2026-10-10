@@ -105,9 +105,7 @@
         </div>
 
         <section id="upload-panel" class="w-full max-w-2xl mx-auto">
-            <!-- Door een label met for="file-input" te gebruiken opent iOS Safari de camera/bibliotheek direct -->
             <label for="file-input" id="drop-zone" class="card-glow block border-2 border-dashed border-sky-500/40 hover:border-sky-400 rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-xl active:scale-[0.99]">
-                <!-- Onzichtbaar input element dat iOS native aanstuurt -->
                 <input type="file" id="file-input" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" accept="image/*">
                 
                 <div id="drop-content" class="flex flex-col items-center justify-center space-y-4 pointer-events-none">
@@ -184,7 +182,7 @@
 
             <!-- Kaarten Grid -->
             <div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <!-- Wordt dynamisch gevuld -->
+                <!-- Dynamisch gevuld -->
             </div>
         </section>
 
@@ -210,7 +208,8 @@
     </footer>
 
     <script>
-        const BACKEND_API_BASE_URL = "https://brimi-scanner-.onrender.com";
+        // Exacte URL uit jouw Render dashboard (zonder het foute streepje aan het eind)
+        const BACKEND_API_BASE_URL = "https://brimi-scanner.onrender.com";
 
         const fileInput = document.getElementById('file-input');
         const dropContent = document.getElementById('drop-content');
@@ -256,7 +255,6 @@
             }
         });
 
-        // Verkleint de foto in de browser zodat grote iPhone foto's niet haperen over internet
         function processSelectedFile(file) {
             if (!file.type.startsWith('image/')) {
                 showNotification('Ongeldig bestand', 'Selecteer een duidelijke afbeelding van je Pokémon kaart(en).');
@@ -342,12 +340,12 @@
 
                 if (!response.ok) {
                     const errData = await response.json().catch(() => ({}));
-                    throw new Error(errData.detail || `Server fout (${response.status}). Wacht even als de server wakker wordt.`);
+                    throw new Error(errData.detail || `Server reageert niet (${response.status}). Probeer over enkele seconden opnieuw.`);
                 }
 
                 const cards = await response.json();
                 if (!cards || cards.length === 0) {
-                    throw new Error("Geen Pokémon kaarten herkend op deze foto. Zorg voor goed licht.");
+                    throw new Error("Geen Pokémon kaarten herkend op deze foto. Zorg voor goed licht en scherpe letters.");
                 }
 
                 currentCardsData = cards;
