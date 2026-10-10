@@ -73,7 +73,6 @@
             </p>
         </div>
 
-        <!-- 3 Feature Blokken -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto w-full">
             <div class="card-glow rounded-xl p-3.5 flex items-center gap-3 border border-slate-800">
                 <div class="w-9 h-9 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center text-sm shrink-0">
@@ -130,7 +129,6 @@
                     </div>
                 </div>
 
-                <!-- Preview container tijdens upload -->
                 <div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[380px] bg-black/60 flex items-center justify-center border border-slate-800">
                     <img id="image-display" src="" alt="Geüploade kaart" class="max-h-[360px] w-auto object-contain rounded-xl">
                     <div id="laser-effect" class="hidden laser-bar"></div>
@@ -144,7 +142,7 @@
             </div>
 
             <div class="space-y-1">
-                <h3 id="status-title" class="text-base font-bold text-white">Kaart analyseren...</h3>
+                <h3 id="status-title" class="text-base font-bold text-white">Foto analyseren...</h3>
                 <p id="status-subtitle" class="text-xs text-slate-400">Het AI-brein bekijkt alle kaarten op de foto...</p>
             </div>
 
@@ -180,7 +178,6 @@
                 </div>
             </div>
 
-            <!-- Kaarten Grid -->
             <div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <!-- Dynamisch gevuld -->
             </div>
@@ -268,7 +265,7 @@
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const maxDim = 1200;
+                    const maxDim = 900;
 
                     if (width > maxDim || height > maxDim) {
                         if (width > height) {
@@ -285,7 +282,7 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.80);
                     imageDisplay.src = compressedBase64;
                     const rawBase64 = compressedBase64.split(',')[1];
 
@@ -323,11 +320,11 @@
             resultsPanel.classList.add('hidden');
             cardsContainer.innerHTML = '';
 
-            setScanStep(1, "Foto inspecteren...", "Afbeelding naar het BRIMI brein verzenden...", 30);
+            setScanStep(1, "Foto inspecteren...", "Afbeelding naar het BRIMI brein verzenden...", 35);
 
             try {
-                setTimeout(() => setScanStep(2, "Kaarten identificeren...", "AI herkent namen, nummers en series...", 65), 1500);
-                setTimeout(() => setScanStep(3, "Cardmarket NL data koppelen...", "Live Nederlandse prijzen ophalen...", 90), 3000);
+                setTimeout(() => setScanStep(2, "Kaarten identificeren...", "AI herkent namen, nummers en series...", 70), 1200);
+                setTimeout(() => setScanStep(3, "Cardmarket NL data koppelen...", "Live Nederlandse prijzen ophalen...", 90), 2500);
 
                 const response = await fetch(`${BACKEND_API_BASE_URL}/api/scan`, {
                     method: 'POST',
