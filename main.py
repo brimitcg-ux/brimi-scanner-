@@ -7,19 +7,17 @@ from typing import Optional, List, Dict, Any
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 app = FastAPI(
     title="BRIMI Cardmarket & AI Vision Engine",
     description="Centrale backend voor automatische kaartdetectie via AI en live Cardmarket NL prijzen.",
-    version="2.1.0"
+    version="2.2.0"
 )
 
-# CORS geoptimaliseerd voor WebKit / Safari op iOS:
-# allow_credentials=False voorkomt dat Safari de connectie weigert bij een wildcard origin (*)
+# CORS geoptimaliseerd voor WebKit / Safari op iOS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,9 +25,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
-
-# API sleutel ophalen uit de veilige Render omgeving
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL = timedelta(minutes=15)
@@ -235,11 +230,11 @@ async def get_price(name: str, number: str, language: str = "EN", condition: str
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
     """Ontvangt de foto, herkent via AI alle kaarten en zoekt direct de Cardmarket NL prijzen."""
-    key = os.getenv("GEMINI_API_KEY", "").strip() or GEMINI_API_KEY
+    key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
         raise HTTPException(
             status_code=500, 
-            detail="GEMINI_API_KEY is nog niet ingesteld in Render Environment Variables."
+            detail="GEMINI_API_KEY is niet ingesteld in Render Environment Variables."
         )
 
     prompt_text = """
@@ -259,6 +254,7 @@ Identificeer voor IEDERE afzonderlijke Pokémon kaart op de foto:
 10. "conditionReason": Korte beschrijving van de visuele staat op de foto.
 
 Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde kaart.
+Geef geen markdown opmaak of extra uitleg, alleen de JSON array.
 """
 
     gemini_body = {
@@ -278,15 +274,26 @@ Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde
         ],
         "generationConfig": {
             "responseMimeType": "application/json"
-        }
+        },
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ]
     }
 
-    # Probeer eerst gemini-1.5-flash, fallback naar gemini-2.0-flash
-    models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
-    raw_text = None
-    last_error = ""
+    # Actuele Flash-modellen
+    models_to_try = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-flash-latest",
+        "gemini-1.5-flash"
+    ]
+    raw_text = ""
+    error_logs = []
 
-    async with httpx.AsyncClient(timeout=35.0) as client:
+    async with httpx.AsyncClient(timeout=45.0) as client:
         for model_name in models_to_try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             try:
@@ -296,17 +303,30 @@ Antwoord UITSLUITEND met een geldige JSON ARRAY met een object per gedetecteerde
                     candidates = res_json.get("candidates", [])
                     if candidates:
                         parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            raw_text = parts[0].get("text", "")
-                            if raw_text:
-                                break
+                        extracted_text = ""
+                        for part in parts:
+                            if "text" in part and part["text"]:
+                                extracted_text += part["text"]
+                        
+                        if extracted_text.strip():
+                            raw_text = extracted_text.strip()
+                            break
+                        else:
+                            finish_r = candidates[0].get("finishReason", "GEEN_TEKST")
+                            error_logs.append(f"{model_name}: 200 OK maar finishReason={finish_r}")
+                    else:
+                        error_logs.append(f"{model_name}: 200 OK maar lege candidates lijst")
                 else:
-                    last_error = f"{model_name}: status {res.status_code} - {res.text[:200]}"
+                    error_logs.append(f"{model_name} (HTTP {res.status_code}): {res.text[:120]}")
             except Exception as e:
-                last_error = str(e)
+                error_logs.append(f"{model_name} exception: {str(e)[:120]}")
 
     if not raw_text:
-        raise HTTPException(status_code=502, detail=f"Google AI Vision kon niet worden geraadpleegd: {last_error}")
+        diagnose = " | ".join(error_logs[-2:]) if error_logs else "Onbekende time-out"
+        raise HTTPException(
+            status_code=502, 
+            detail=f"Google AI Vision kon niet worden geraadpleegd: {diagnose}"
+        )
 
     try:
         clean_json_str = raw_text.strip()
