@@ -491,29 +491,32 @@
                 return;
             }
 
-            let mappedCards = cards.map((c, i) => ({
-                id: i,
-                name: c.cardName || 'Pokémon Kaart',
-                number: c.cardNumber || '?',
-                setTotal: c.setTotal || '',
-                setCode: c.setCode || '',
-                setName: c.setName || 'Onbekende Set',
-                language: c.language || 'Engels',
-                languageCode: c.languageCode || 'EN',
-                rarity: c.rarity || 'Normaal',
-                condition: c.condition || 'Near Mint (NM)',
-                isGraded: !!c.isGraded,
-                gradingCompany: c.gradingCompany || null,
-                grade: c.grade || null,
-                certNumber: c.certNumber || null,
-                certUrl: c.certUrl || null,
-                basePriceNM: parseFloat(c.basePriceNM || c.estimatedPriceEUR || 2.5),
-                currentPrice: parseFloat(c.estimatedPriceEUR || 2.5),
-                lowPriceEUR: c.lowPriceEUR ? parseFloat(c.lowPriceEUR) : null,
-                avg30EUR: c.avg30EUR ? parseFloat(c.avg30EUR) : null,
-                marketUrl: c.directMarketUrl || '#',
-                priceSource: c.priceSource || 'Cardmarket NL'
-            }));
+            let mappedCards = cards.map((c, i) => {
+                const realPrice = parseFloat(c.currentPrice ?? c.basePriceNM ?? c.lowPriceEUR ?? 2.5);
+                return {
+                    id: i,
+                    name: c.cardName || 'Pokémon Kaart',
+                    number: c.cardNumber || '?',
+                    setTotal: c.setTotal || '',
+                    setCode: c.setCode || '',
+                    setName: c.setName || 'Onbekende Set',
+                    language: c.language || 'Engels',
+                    languageCode: c.languageCode || 'EN',
+                    rarity: c.rarity || 'Normaal',
+                    condition: c.condition || 'Near Mint (NM)',
+                    isGraded: !!c.isGraded,
+                    gradingCompany: c.gradingCompany || null,
+                    grade: c.grade || null,
+                    certNumber: c.certNumber || null,
+                    certUrl: c.certUrl || null,
+                    basePriceNM: realPrice,
+                    currentPrice: realPrice,
+                    lowPriceEUR: c.lowPriceEUR ? parseFloat(c.lowPriceEUR) : null,
+                    avg30EUR: c.avg30EUR ? parseFloat(c.avg30EUR) : null,
+                    marketUrl: c.directMarketUrl || '#',
+                    priceSource: c.priceSource || 'Cardmarket NL'
+                };
+            });
 
             // Verbetering 2: Automatisch sorteren op waarde (duurste kaart bovenaan)
             mappedCards.sort((a, b) => b.currentPrice - a.currentPrice);
