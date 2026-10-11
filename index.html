@@ -213,7 +213,7 @@
             </div>
 
             <div class="w-full bg-[#040812] h-2 rounded-full overflow-hidden border border-brand-border">
-                <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-500 rounded-full" style="width: 30%"></div>
+                <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-500 rounded-full" style="width: 35%"></div>
             </div>
 
             <p id="status-subtitle" class="text-xs text-brand-textMuted font-medium">
@@ -221,14 +221,14 @@
             </p>
         </div>
 
-        <!-- Fout / Opnieuw proberen box -->
+        <!-- Fout / Opnieuw proberen box (Zonder jargon) -->
         <div id="retry-box" class="hidden agency-card rounded-2xl p-5 border-red-500/40 space-y-3">
             <div class="flex items-start gap-3">
                 <i class="fa-solid fa-triangle-exclamation text-red-400 text-lg mt-0.5"></i>
                 <div class="space-y-1">
-                    <p class="text-sm font-bold text-white" id="retry-title">Verbindingsfout</p>
+                    <p class="text-sm font-bold text-white" id="retry-title">Scan Mislukt</p>
                     <p class="text-xs text-brand-textMuted font-medium leading-relaxed" id="retry-desc">
-                        Er kon geen verbinding worden gemaakt met de server.
+                        Er kon geen verbinding worden gemaakt. Probeer het opnieuw.
                     </p>
                 </div>
             </div>
@@ -341,11 +341,6 @@
         let currentCards = [];
         let lastProcessedBase64 = null;
 
-        // Stil voorverwarmen bij openen van pagina
-        window.addEventListener('DOMContentLoaded', () => {
-            fetch(`${API_BASE}/`, { method: 'GET', mode: 'cors' }).catch(() => {});
-        });
-
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files && e.target.files[0];
             if (!file) return;
@@ -357,72 +352,75 @@
             resultsPanel.classList.add('hidden');
             retryBox.classList.add('hidden');
 
-            statusTitle.textContent = "Foto laden...";
-            statusSubtitle.textContent = "Afbeelding optimaliseren...";
+            statusTitle.textContent = "Foto optimaliseren...";
+            statusSubtitle.textContent = "Afbeelding gereedmaken voor analyse...";
             progressBar.style.width = "25%";
 
-            const reader = new FileReader();
+            // Snelle geheugenvriendelijke blob flow voor iOS
+            const objectUrl = URL.createObjectURL(file);
+            const img = new Image();
 
-            reader.onload = (evt) => {
-                const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl);
 
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let w = img.width;
-                    let h = img.height;
-                    const maxDim = 960;
+                const canvas = document.createElement('canvas');
+                let w = img.naturalWidth || img.width;
+                let h = img.naturalHeight || img.height;
+                const maxDim = 800; // Ideaal formaat voor AI OCR & razendsnel uploaden (~75KB)
 
-                    if (w > maxDim || h > maxDim) {
-                        if (w > h) {
-                            h = Math.round((h * maxDim) / w);
-                            w = maxDim;
-                        } else {
-                            w = Math.round((w * maxDim) / h);
-                            h = maxDim;
-                        }
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) {
+                        h = Math.round((h * maxDim) / w);
+                        w = maxDim;
+                    } else {
+                        w = Math.round((w * maxDim) / h);
+                        h = maxDim;
                     }
+                }
 
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
 
-                    const compressed = canvas.toDataURL('image/jpeg', 0.82);
-                    imageDisplay.src = compressed;
-                    lastProcessedBase64 = compressed.split(',')[1];
+                const compressed = canvas.toDataURL('image/jpeg', 0.80);
+                imageDisplay.src = compressed;
+                lastProcessedBase64 = compressed.split(',')[1];
 
-                    executeScan(lastProcessedBase64);
-                };
-
-                img.onerror = () => {
-                    const rawData = evt.target.result;
-                    imageDisplay.src = rawData;
-                    lastProcessedBase64 = rawData.split(',')[1];
-                    executeScan(lastProcessedBase64);
-                };
-
-                img.src = evt.target.result;
+                executeScan(lastProcessedBase64);
             };
 
-            reader.readAsDataURL(file);
+            img.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                retryTitle.textContent = "Afbeelding niet geladen";
+                retryDesc.textContent = "De foto kon niet worden gelezen. Probeer het opnieuw.";
+                retryBox.classList.remove('hidden');
+                scanningState.classList.add('hidden');
+                laserBeam.classList.add('hidden');
+            };
+
+            img.src = objectUrl;
             fileInput.value = '';
         });
 
         async function executeScan(base64Data) {
             statusTitle.textContent = "Kaart identificeren...";
-            statusSubtitle.textContent = "Leest serie, nummer en grader-label...";
+            statusSubtitle.textContent = "Leest serie, nummer en conditie...";
             progressBar.style.width = "50%";
 
             const progressTimer = setTimeout(() => {
-                statusTitle.textContent = "Prijzen controleren...";
-                statusSubtitle.textContent = "Cardmarket NL & PriceCharting koersen raadplegen...";
+                statusTitle.textContent = "Koersen raadplegen...";
+                statusSubtitle.textContent = "Marktprijzen en veilingstatistieken ophalen...";
                 progressBar.style.width = "80%";
-            }, 1500);
+            }, 1200);
 
             try {
                 const response = await fetch(`${API_BASE}/api/scan`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({ 
                         image_base64: base64Data,
                         mime_type: "image/jpeg"
@@ -432,11 +430,10 @@
                 clearTimeout(progressTimer);
 
                 if (!response.ok) {
-                    const errText = await response.text();
-                    let errMsg = `Server status ${response.status}`;
+                    let errMsg = `Verbindingsfout (${response.status})`;
                     try {
-                        const parsed = JSON.parse(errText);
-                        errMsg = parsed.detail || errMsg;
+                        const parsed = await response.json();
+                        if (parsed.detail) errMsg = parsed.detail;
                     } catch(e) {}
                     throw new Error(errMsg);
                 }
@@ -448,16 +445,16 @@
                     scanningState.classList.add('hidden');
                     laserBeam.classList.add('hidden');
                     renderResults(data);
-                }, 300);
+                }, 250);
 
             } catch (error) {
                 clearTimeout(progressTimer);
                 scanningState.classList.add('hidden');
                 laserBeam.classList.add('hidden');
 
-                retryTitle.textContent = "Scan Kon Niet Voltooid Worden";
-                retryDesc.textContent = error.message.includes('fetch') || error.message === 'Load failed'
-                    ? "Render was waarschijnlijk nog bezig met opstarten. Tik nu op 'Opnieuw Proberen' om direct te scannen!"
+                retryTitle.textContent = "Scan Mislukt";
+                retryDesc.textContent = error.message.includes('Load failed') || error.message.includes('fetch')
+                    ? "Er kon geen verbinding tot stand worden gebracht. Tik op opnieuw proberen om de scan te voltooien."
                     : error.message;
                 retryBox.classList.remove('hidden');
             }
@@ -691,7 +688,7 @@ Stuur gerust een berichtje bij interesse! 🤝`;
 
             let cardList = currentCards.map((c) => {
                 const flag = getFlag(c.languageCode);
-                const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${c.number}`;
+                const numLabel = c.setTotal ? `${card.number}/${card.setTotal}` : `${card.number}`;
                 const setCodeLabel = c.setCode ? `${c.setCode} ` : '';
                 return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}\n💶 Prijs: € ${c.currentPrice.toFixed(2)}`;
             }).join('\n\n');
