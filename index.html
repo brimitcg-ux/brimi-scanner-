@@ -1,732 +1,608 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BRIMI — Nederlandse PKMN prijzen checker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        night: {
-                            base: '#030814',
-                            deep: '#061022',
-                            surface: '#0b1b36',
-                            border: '#1a3055',
-                            accent: '#2f4b7a',
-                            slate: '#748aa8',
-                            light: '#b6c6dc'
-                        },
-                        brimi: {
-                            gold: '#facc15',
-                            emerald: '#10b981',
-                            cyan: '#38bdf8'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['"Plus Jakarta Sans"', '-apple-system', 'sans-serif'],
-                        mono: ['"JetBrains Mono"', 'monospace']
-                    }
-                }
-            }
-        }
-    </script>
-
-    <style>
-        body { 
-            background: radial-gradient(circle at 50% 0%, #0d2247 0%, #061022 55%, #020610 100%);
-            color: #f1f5f9;
-            min-height: 100vh;
-        }
-
-        .glass-panel {
-            background: linear-gradient(180deg, rgba(11, 27, 54, 0.75) 0%, rgba(6, 16, 34, 0.85) 100%);
-            backdrop-filter: blur(28px);
-            -webkit-backdrop-filter: blur(28px);
-            border: 1px solid rgba(116, 138, 168, 0.22);
-            box-shadow: 0 24px 60px -15px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-        }
-
-        .glow-accent {
-            box-shadow: 0 0 24px rgba(56, 189, 248, 0.15);
-        }
-
-        .vf-corner {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            border-color: #748aa8;
-            pointer-events: none;
-            transition: all 0.3s ease;
-        }
-        .vf-tl { top: 14px; left: 14px; border-top: 2.5px solid; border-left: 2.5px solid; border-top-left-radius: 8px; }
-        .vf-tr { top: 14px; right: 14px; border-top: 2.5px solid; border-right: 2.5px solid; border-top-right-radius: 8px; }
-        .vf-bl { bottom: 14px; left: 14px; border-bottom: 2.5px solid; border-left: 2.5px solid; border-bottom-left-radius: 8px; }
-        .vf-br { bottom: 14px; right: 14px; border-bottom: 2.5px solid; border-right: 2.5px solid; border-bottom-right-radius: 8px; }
-
-        .group:hover .vf-tl { top: 10px; left: 10px; border-color: #ffffff; }
-        .group:hover .vf-tr { top: 10px; right: 10px; border-color: #ffffff; }
-        .group:hover .vf-bl { bottom: 10px; left: 10px; border-color: #ffffff; }
-        .group:hover .vf-br { bottom: 10px; right: 10px; border-color: #ffffff; }
-
-        @keyframes laser-sweep {
-            0% { top: 5%; opacity: 0.3; }
-            50% { top: 92%; opacity: 1; }
-            100% { top: 5%; opacity: 0.3; }
-        }
-        .laser-sweep {
-            position: absolute;
-            left: 0;
-            right: 0;
-            height: 2.5px;
-            background: linear-gradient(90deg, transparent 5%, #748aa8 20%, #ffffff 50%, #748aa8 80%, transparent 95%);
-            box-shadow: 0 0 16px rgba(255, 255, 255, 0.9), 0 0 32px rgba(56, 189, 248, 0.7);
-            animation: laser-sweep 1.7s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        .brimi-dot {
-            display: inline-block;
-            position: relative;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            border: 1.5px solid #748aa8;
-            background: #ffffff;
-            margin-left: 2px;
-            vertical-align: 1px;
-        }
-        .brimi-dot::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: -1px;
-            right: -1px;
-            height: 1.5px;
-            background: #061022;
-            transform: translateY(-50%);
-        }
-        .brimi-dot::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 4px;
-            height: 4px;
-            background: #ffffff;
-            border: 1px solid #061022;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BRIMI — Nederlandse PKMN prijzen checker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script>
+tailwind.config = {
+theme: {
+extend: {
+colors: {
+brand: {
+bg: '#040812',
+card: '#0b1324',
+surface: '#101a30',
+border: '#182744',
+borderLight: '#243b66',
+mint: '#00e5b0',
+mintHover: '#00c99b',
+cyan: '#00c8ff',
+blue: '#1e5bff',
+textMuted: '#7f93b0'
+}
+},
+fontFamily: {
+sans: ['"Plus Jakarta Sans"', '-apple-system', 'sans-serif'],
+mono: ['"JetBrains Mono"', 'monospace']
+}
+}
+}
+}
+</script>
+<style>
+body {
+background: #040812;
+background-image:
+radial-gradient(circle at 85% 10%, rgba(0, 200, 255, 0.08) 0%, transparent 45%),
+radial-gradient(circle at 15% 40%, rgba(0, 229, 176, 0.06) 0%, transparent 50%),
+radial-gradient(circle at 50% 90%, rgba(30, 91, 255, 0.06) 0%, transparent 50%);
+color: #ffffff;
+min-height: 100vh;
+}
+.agency-card {
+background: #0b1324;
+border: 1px solid #182744;
+box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.7);
+}
+.agency-glow-btn {
+background: #00e5b0;
+color: #040812;
+transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+box-shadow: 0 4px 20px rgba(0, 229, 176, 0.25);
+}
+.agency-glow-btn:hover {
+background: #00c99b;
+transform: translateY(-1px);
+box-shadow: 0 6px 26px rgba(0, 229, 176, 0.35);
+}
+.agency-glow-btn:active {
+transform: translateY(0);
+}
+.agency-logo-gradient {
+background: linear-gradient(135deg, #1e5bff 0%, #00c8ff 50%, #00e5b0 100%);
+}
+.vf-corner {
+position: absolute;
+width: 18px;
+height: 18px;
+border-color: #243b66;
+pointer-events: none;
+transition: all 0.3s ease;
+}
+.vf-tl { top: 16px; left: 16px; border-top: 2.5px solid; border-left: 2.5px solid; border-top-left-radius: 8px; }
+.vf-tr { top: 16px; right: 16px; border-top: 2.5px solid; border-right: 2.5px solid; border-top-right-radius: 8px; }
+.vf-bl { bottom: 16px; left: 16px; border-bottom: 2.5px solid; border-left: 2.5px solid; border-bottom-left-radius: 8px; }
+.vf-br { bottom: 16px; right: 16px; border-bottom: 2.5px solid; border-right: 2.5px solid; border-bottom-right-radius: 8px; }
+.group:hover .vf-tl { top: 12px; left: 12px; border-color: #00e5b0; }
+.group:hover .vf-tr { top: 12px; right: 12px; border-color: #00e5b0; }
+.group:hover .vf-bl { bottom: 12px; left: 12px; border-color: #00e5b0; }
+.group:hover .vf-br { bottom: 12px; right: 12px; border-color: #00e5b0; }
+@keyframes laser-sweep {
+0% { top: 5%; opacity: 0.3; }
+50% { top: 92%; opacity: 1; }
+100% { top: 5%; opacity: 0.3; }
+}
+.laser-sweep {
+position: absolute;
+left: 0;
+right: 0;
+height: 2.5px;
+background: linear-gradient(90deg, transparent 5%, #00c8ff 20%, #00e5b0 50%, #00c8ff 80%, transparent 95%);
+box-shadow: 0 0 16px #00e5b0, 0 0 32px #00c8ff;
+animation: laser-sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.logo-ribbon {
+position: relative;
+width: 32px;
+height: 32px;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+</style>
 </head>
-<body class="font-sans antialiased flex flex-col justify-between selection:bg-night-accent selection:text-white pb-10">
-
-    <header class="border-b border-night-border/40 bg-night-base/80 backdrop-blur-2xl sticky top-0 z-40">
-        <div class="max-w-2xl mx-auto px-4 py-3.5 flex justify-between items-center">
-            
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-2xl border border-night-border bg-night-deep flex items-center justify-center text-white shadow-inner">
-                    <svg class="w-5 h-5 text-night-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="2.5" y="5.5" width="12" height="16" rx="2" transform="rotate(-8 8.5 13.5)" stroke-opacity="0.45" />
-                        <rect x="8" y="3" width="13" height="17" rx="2" fill="rgba(116, 138, 168, 0.12)" />
-                        <path d="M12 9.5h5M12 12.5h3" stroke-width="1.5" stroke-opacity="0.7" />
-                        <circle cx="14.5" cy="15.5" r="1.5" fill="currentColor" fill-opacity="0.4" />
-                    </svg>
-                </div>
-                <div class="flex flex-col">
-                    <div class="flex items-baseline">
-                        <span class="text-xl font-black tracking-widest text-white uppercase">BRIMI</span>
-                        <span class="brimi-dot"></span>
-                    </div>
-                    <span class="text-[10px] tracking-widest font-bold uppercase text-night-slate">
-                        Nederlandse PKMN prijzen checker
-                    </span>
-                </div>
-            </div>
-
-            <!-- Rechterkant clean gelaten zoals gevraagd -->
-            <div></div>
-
-        </div>
-    </header>
-
-    <main class="max-w-2xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-6">
-
-        <div class="text-center space-y-1">
-            <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Scan je kaart. Check de actuele koers.
-            </h1>
-            <p class="text-xs text-night-slate font-medium max-w-sm mx-auto">
-                Cardmarket NL voor singles, PriceCharting veilingkoersen voor graded slabs.
-            </p>
-        </div>
-
-        <div class="w-full">
-            <label for="file-input" id="drop-zone" class="glass-panel relative block rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 group border border-night-border/60 hover:border-night-slate/60 active:scale-[0.99] glow-accent">
-                <input type="file" id="file-input" class="hidden" accept="image/*">
-                
-                <div class="vf-corner vf-tl"></div>
-                <div class="vf-corner vf-tr"></div>
-                <div class="vf-corner vf-bl"></div>
-                <div class="vf-corner vf-br"></div>
-
-                <div id="drop-content" class="flex flex-col items-center justify-center space-y-4 pointer-events-none py-4">
-                    <div class="w-16 h-16 rounded-2xl bg-night-deep border border-night-border flex items-center justify-center text-white text-2xl group-hover:scale-105 group-hover:border-white transition-all duration-300 shadow-xl">
-                        <i class="fa-solid fa-camera text-night-light group-hover:text-white transition-colors"></i>
-                    </div>
-
-                    <div class="space-y-1">
-                        <p class="text-base font-extrabold text-white">
-                            Maak een foto of kies uit bibliotheek
-                        </p>
-                        <p class="text-xs text-night-slate font-medium">
-                            Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
-                        </p>
-                    </div>
-
-                    <span class="inline-flex items-center gap-2 bg-white text-night-base font-black px-5 py-2.5 rounded-2xl text-xs group-hover:bg-slate-100 transition shadow-lg">
-                        <i class="fa-solid fa-images"></i>
-                        <span>Foto Maken of Uploaden</span>
-                    </span>
-                </div>
-
-                <div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[350px] bg-black/70 flex items-center justify-center border border-night-border">
-                    <img id="image-display" src="" alt="Gescande Pokémon kaart" class="max-h-[330px] w-auto object-contain rounded-xl">
-                    <div id="laser-beam" class="hidden laser-sweep"></div>
-                </div>
-            </label>
-        </div>
-
-        <div id="scanning-state" class="hidden w-full glass-panel rounded-2xl p-5 text-center space-y-3">
-            <div class="flex items-center justify-center gap-3">
-                <i class="fa-solid fa-circle-notch fa-spin text-white text-sm"></i>
-                <h3 id="status-title" class="text-xs font-black tracking-wider text-white uppercase">Kaart analyseren...</h3>
-            </div>
-            <p id="status-subtitle" class="text-[11px] text-night-slate">Leest serie, nummer en checkt actuele koersen...</p>
-            <div class="w-full bg-night-deep rounded-full h-1.5 overflow-hidden border border-night-border/30">
-                <div id="progress-bar" class="h-full bg-white transition-all duration-300 rounded-full" style="width: 45%"></div>
-            </div>
-        </div>
-
-        <div id="results-panel" class="hidden w-full space-y-4">
-            
-            <div class="flex items-center justify-between px-1 gap-2 flex-wrap">
-                <span class="text-xs font-black tracking-wider uppercase text-night-light flex items-center gap-2">
-                    <i class="fa-solid fa-circle-check text-emerald-400"></i>
-                    <span id="results-count-label">Scan Resultaat</span>
-                </span>
-                
-                <div class="flex items-center gap-2">
-                    <button type="button" id="btn-share-all" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl border border-emerald-400/30 transition flex items-center gap-1.5 cursor-pointer shadow-md">
-                        <i class="fa-brands fa-whatsapp"></i> Bied Alles Aan
-                    </button>
-                    <button type="button" id="btn-reset" class="bg-night-deep hover:bg-night-surface text-slate-300 text-xs font-bold px-3.5 py-1.5 rounded-xl border border-night-border transition flex items-center gap-1.5 cursor-pointer">
-                        <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Nieuwe Scan
-                    </button>
-                </div>
-            </div>
-
-            <div id="cards-container" class="space-y-4"></div>
-
-        </div>
-
-        <div class="pt-4 border-t border-night-border/40 space-y-3">
-            <div class="text-center">
-                <h3 class="text-[11px] font-black uppercase tracking-widest text-night-slate">Waarom BRIMI Scanner?</h3>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div class="glass-panel rounded-2xl p-4 space-y-2 border border-night-border/60">
-                    <div class="w-8 h-8 rounded-xl bg-night-deep border border-night-border text-white flex items-center justify-center text-xs">
-                        <i class="fa-solid fa-bolt"></i>
-                    </div>
-                    <h4 class="text-xs font-black text-white">Geen Urenlang Speurwerk</h4>
-                    <p class="text-[11px] text-slate-300 leading-relaxed">
-                        Stop met eindeloos handmatig zoeken op internet. Binnen één seconde zie je direct wat de actuele Nederlandse marktwaarde is.
-                    </p>
-                </div>
-
-                <div class="glass-panel rounded-2xl p-4 space-y-2 border border-night-border/60">
-                    <div class="w-8 h-8 rounded-xl bg-night-deep border border-night-border text-amber-400 flex items-center justify-center text-xs">
-                        <i class="fa-solid fa-gem"></i>
-                    </div>
-                    <h4 class="text-xs font-black text-white">PriceCharting Slab Koersen</h4>
-                    <p class="text-[11px] text-slate-300 leading-relaxed">
-                        Herkent PSA-, CGC- en Beckett-labels en toont direct de werkelijke veilingwaarde van de slab.
-                    </p>
-                </div>
-
-                <div class="glass-panel rounded-2xl p-4 space-y-2 border border-night-border/60">
-                    <div class="w-8 h-8 rounded-xl bg-night-deep border border-night-border text-emerald-400 flex items-center justify-center text-xs">
-                        <i class="fa-brands fa-whatsapp text-sm"></i>
-                    </div>
-                    <h4 class="text-xs font-black text-white">1-Tik Community Aanbod</h4>
-                    <p class="text-[11px] text-slate-300 leading-relaxed">
-                        Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief vraagprijs en conditie.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-    </main>
-
-    <div id="price-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-        <div class="glass-panel max-w-xs w-full rounded-2xl p-5 text-center space-y-4 shadow-2xl border border-night-border">
-            <div class="space-y-1">
-                <h4 class="text-sm font-black text-white">Pas Vraagprijs Aan</h4>
-                <p class="text-[11px] text-night-slate" id="price-modal-card-name">Wat vraag je voor de kaart?</p>
-            </div>
-
-            <div class="relative">
-                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold font-mono">€</span>
-                <input type="number" step="0.05" id="custom-price-input" class="w-full bg-night-deep border border-night-border focus:border-white rounded-xl py-2.5 pl-8 pr-3 text-white font-mono font-bold text-lg text-center outline-none">
-            </div>
-
-            <div class="flex gap-2">
-                <button type="button" id="btn-cancel-price" class="flex-1 bg-night-deep hover:bg-night-surface text-slate-300 font-semibold py-2 rounded-xl text-xs transition cursor-pointer border border-night-border">
-                    Annuleren
-                </button>
-                <button type="button" id="btn-save-price" class="flex-1 bg-white hover:bg-slate-100 text-night-base font-black py-2 rounded-xl text-xs transition cursor-pointer">
-                    Opslaan
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div id="notify-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-        <div class="glass-panel max-w-sm w-full rounded-2xl p-6 text-center space-y-4 shadow-2xl border border-night-border">
-            <div class="w-10 h-10 rounded-full bg-night-deep border border-night-border text-amber-400 flex items-center justify-center mx-auto text-base">
-                <i class="fa-solid fa-circle-exclamation"></i>
-            </div>
-            <div class="space-y-1">
-                <h4 id="notify-title" class="text-sm font-bold text-white">Bericht</h4>
-                <p id="notify-desc" class="text-xs text-slate-300 leading-relaxed"></p>
-            </div>
-            <button type="button" id="notify-close" class="w-full bg-white hover:bg-slate-100 text-night-base font-bold py-2.5 rounded-xl text-xs transition cursor-pointer">
-                Begrepen
-            </button>
-        </div>
-    </div>
-
-    <script>
-        const BACKEND_URL = "https://brimi-scanner.onrender.com";
-
-        // Pre-warm ping naar Render bij pagina-opening
-        window.addEventListener('DOMContentLoaded', () => {
-            fetch(`${BACKEND_URL}/`).catch(() => {});
-        });
-
-        const fileInput = document.getElementById('file-input');
-        const dropContent = document.getElementById('drop-content');
-        const previewWrapper = document.getElementById('preview-wrapper');
-        const imageDisplay = document.getElementById('image-display');
-        const laserBeam = document.getElementById('laser-beam');
-        const scanningState = document.getElementById('scanning-state');
-        const resultsPanel = document.getElementById('results-panel');
-        const cardsContainer = document.getElementById('cards-container');
-        const resultsCountLabel = document.getElementById('results-count-label');
-        const btnShareAll = document.getElementById('btn-share-all');
-        const statusTitle = document.getElementById('status-title');
-        const statusSubtitle = document.getElementById('status-subtitle');
-        const progressBar = document.getElementById('progress-bar');
-        const btnReset = document.getElementById('btn-reset');
-
-        const notifyModal = document.getElementById('notify-modal');
-        const notifyTitle = document.getElementById('notify-title');
-        const notifyDesc = document.getElementById('notify-desc');
-        const notifyClose = document.getElementById('notify-close');
-        const priceModal = document.getElementById('price-modal');
-        const priceModalCardName = document.getElementById('price-modal-card-name');
-        const customPriceInput = document.getElementById('custom-price-input');
-        const btnCancelPrice = document.getElementById('btn-cancel-price');
-        const btnSavePrice = document.getElementById('btn-save-price');
-
-        let lastScannedCards = [];
-        let editingIndex = null;
-
-        function playChime() {
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(880.00, ctx.currentTime + 0.14);
-                gain.gain.setValueAtTime(0.15, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.35);
-            } catch(e) {}
-        }
-
-        function triggerHaptic() {
-            if (navigator.vibrate) navigator.vibrate(35);
-        }
-
-        function showNotification(title, message) {
-            notifyTitle.textContent = title;
-            notifyDesc.textContent = message;
-            notifyModal.classList.remove('hidden');
-        }
-        notifyClose.addEventListener('click', () => notifyModal.classList.add('hidden'));
-
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files.length > 0) {
-                const file = e.target.files[0];
-                if (!file.type.startsWith('image/')) {
-                    showNotification('Ongeldig bestand', 'Selecteer een duidelijke foto van je Pokémon kaart(en).');
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let w = img.width;
-                        let h = img.height;
-                        const maxDim = 850;
-
-                        if (w > maxDim || h > maxDim) {
-                            if (w > h) {
-                                h = Math.round((h * maxDim) / w);
-                                w = maxDim;
-                            } else {
-                                w = Math.round((w * maxDim) / h);
-                                h = maxDim;
-                            }
-                        }
-
-                        canvas.width = w;
-                        canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, w, h);
-
-                        const compressed = canvas.toDataURL('image/jpeg', 0.82);
-                        imageDisplay.src = compressed;
-                        const base64Data = compressed.split(',')[1];
-
-                        dropContent.classList.add('hidden');
-                        previewWrapper.classList.remove('hidden');
-                        laserBeam.classList.remove('hidden');
-
-                        executeScan(base64Data);
-                    };
-                    img.src = evt.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        async function executeScan(base64Data) {
-            scanningState.classList.remove('hidden');
-            resultsPanel.classList.add('hidden');
-            cardsContainer.innerHTML = '';
-
-            statusTitle.textContent = "Analyseren...";
-            statusSubtitle.textContent = "Leest serie, nummer en checkt actuele koersen...";
-            progressBar.style.width = "40%";
-
-            try {
-                setTimeout(() => { progressBar.style.width = "80%"; }, 900);
-
-                const response = await fetch(`${BACKEND_URL}/api/scan`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        image_base64: base64Data,
-                        mime_type: 'image/jpeg'
-                    })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json().catch(() => ({}));
-                    throw new Error(err.detail || `Server fout (HTTP ${response.status})`);
-                }
-
-                const cards = await response.json();
-                if (!cards || cards.length === 0) {
-                    throw new Error("Geen Pokémon kaart herkend. Zorg voor voldoende licht.");
-                }
-
-                lastScannedCards = cards;
-                playChime();
-                triggerHaptic();
-                renderResults(lastScannedCards);
-
-            } catch (err) {
-                console.error("Scan error:", err);
-                showNotification("Scan Probleem", err.message || "Er ging iets mis tijdens de scan.");
-                resetScanner();
-            } finally {
-                laserBeam.classList.add('hidden');
-                scanningState.classList.add('hidden');
-            }
-        }
-
-        function getFlag(code) {
-            const c = (code || 'EN').toUpperCase();
-            if (c === 'EN') return '🇬🇧';
-            if (c === 'JP') return '🇯🇵';
-            if (c === 'CN' || c === 'ZH') return '🇨🇳';
-            return '🌐';
-        }
-
-        window.setCardCondition = function(idx, condition) {
-            triggerHaptic();
-            const card = lastScannedCards[idx];
-            if (!card || card.isGraded) return;
-
-            card.condition = condition;
-            const baseNM = card.basePriceNM || card.estimatedPriceEUR || 3.00;
-
-            if (condition.includes('Near Mint')) {
-                card.estimatedPriceEUR = baseNM;
-            } else if (condition.includes('Light Played')) {
-                card.estimatedPriceEUR = Math.max(1.0, roundPrice(baseNM * 0.82));
-            } else if (condition.includes('Good')) {
-                card.estimatedPriceEUR = Math.max(0.75, roundPrice(baseNM * 0.65));
-            }
-
-            const priceTag = document.getElementById(`price-tag-${idx}`);
-            if (priceTag) priceTag.textContent = `€ ${card.estimatedPriceEUR.toFixed(2)}`;
-
-            ['NM', 'LP', 'GD'].forEach(c => {
-                const btn = document.getElementById(`cond-btn-${idx}-${c}`);
-                if (!btn) return;
-                if ((c === 'NM' && condition.includes('Near Mint')) ||
-                    (c === 'LP' && condition.includes('Light Played')) ||
-                    (c === 'GD' && condition.includes('Good'))) {
-                    btn.className = "flex-1 py-1.5 rounded-lg text-[10px] font-black bg-white text-night-base border border-white transition shadow";
-                } else {
-                    btn.className = "flex-1 py-1.5 rounded-lg text-[10px] font-bold bg-night-deep text-slate-300 border border-night-border hover:bg-night-surface transition";
-                }
-            });
-        };
-
-        function roundPrice(val) {
-            return Math.round(val * 20) / 20;
-        }
-
-        function renderResults(cards) {
-            resultsPanel.classList.remove('hidden');
-            cardsContainer.innerHTML = '';
-
-            const totalCards = cards.length;
-            resultsCountLabel.textContent = totalCards === 1 ? '1 Kaart Gevonden' : `${totalCards} Kaarten Gevonden`;
-
-            if (totalCards > 1) {
-                btnShareAll.classList.remove('hidden');
-            } else {
-                btnShareAll.classList.add('hidden');
-            }
-
-            cards.forEach((card, idx) => {
-                const price = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 3.00;
-                const flag = getFlag(card.languageCode);
-                const isChinese = card.isChinese || (card.languageCode === 'CN');
-                const isSlab = card.isGraded || Boolean(card.gradingCompany);
-
-                let marketBtnText = "Check Cardmarket NL";
-                let marketBtnIcon = "fa-solid fa-arrow-up-right-from-square";
-                if (isSlab) {
-                    marketBtnText = "Check PriceCharting Koers";
-                    marketBtnIcon = "fa-solid fa-chart-line";
-                } else if (isChinese) {
-                    marketBtnText = "Check eBay Sold";
-                }
-
-                const cardBox = document.createElement('div');
-                cardBox.className = "glass-panel rounded-3xl p-5 sm:p-6 space-y-4 border border-night-border/80 shadow-2xl";
-
-                cardBox.innerHTML = `
-                    <div class="flex items-start justify-between gap-3">
-                        <div class="space-y-1">
-                            <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
-                                <span class="bg-night-deep text-night-light px-2.5 py-0.5 rounded-lg border border-night-border font-mono">
-                                    ${card.setCode || 'SET'} ${card.cardNumber || ''}${card.setTotal ? '/' + card.setTotal : ''}
-                                </span>
-                                <span class="bg-night-deep text-slate-200 px-2.5 py-0.5 rounded-lg border border-night-border flex items-center gap-1">
-                                    <span>${flag}</span>
-                                    <span>${card.language || 'Engels'}</span>
-                                </span>
-                                ${isSlab ? `
-                                    <span class="bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2.5 py-0.5 rounded-lg font-black flex items-center gap-1">
-                                        <i class="fa-solid fa-gem text-[10px]"></i>
-                                        <span>${card.gradingCompany || 'SLAB'} ${card.grade || ''}</span>
-                                    </span>
-                                ` : ''}
-                            </div>
-                            <h2 class="text-xl font-black text-white tracking-tight">${card.cardName}</h2>
-                            <p class="text-xs text-night-slate font-medium">${card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
-                        </div>
-
-                        <div class="text-right shrink-0">
-                            <span class="text-[10px] text-night-slate uppercase font-extrabold tracking-wider block">
-                                ${isSlab ? 'Slab Waarde' : 'Vraagprijs / NL'}
-                            </span>
-                            <button type="button" onclick="openPriceModal(${idx})" class="group flex items-center gap-1.5 bg-night-deep hover:bg-night-surface border border-night-border/80 px-3.5 py-1.5 rounded-2xl transition cursor-pointer shadow-inner">
-                                <span id="price-tag-${idx}" class="text-xl font-black text-brimi-gold font-mono">€ ${price.toFixed(2)}</span>
-                                <i class="fa-solid fa-pen text-[10px] text-night-slate group-hover:text-white transition"></i>
-                            </button>
-                            <span class="text-[9px] text-slate-400 block mt-0.5">Tik om aan te passen</span>
-                        </div>
-                    </div>
-
-                    ${!isSlab ? `
-                    <div class="bg-night-deep/80 rounded-2xl p-3 border border-night-border space-y-2">
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-slate-300 font-bold">Kies Conditie:</span>
-                            <span class="text-[10px] text-night-slate font-medium">Past vraagprijs direct aan</span>
-                        </div>
-                        <div class="flex gap-2">
-                            <button type="button" id="cond-btn-${idx}-NM" onclick="setCardCondition(${idx}, 'Near Mint (NM)')" 
-                                    class="flex-1 py-1.5 rounded-lg text-[10px] font-black ${(!card.condition || card.condition.includes('Near Mint')) ? 'bg-white text-night-base border border-white' : 'bg-night-deep text-slate-300 border border-night-border'} transition shadow">
-                                NM
-                            </button>
-                            <button type="button" id="cond-btn-${idx}-LP" onclick="setCardCondition(${idx}, 'Light Played (LP)')" 
-                                    class="flex-1 py-1.5 rounded-lg text-[10px] font-bold ${(card.condition && card.condition.includes('Light Played')) ? 'bg-white text-night-base border border-white' : 'bg-night-deep text-slate-300 border border-night-border'} transition">
-                                LP (-15%)
-                            </button>
-                            <button type="button" id="cond-btn-${idx}-GD" onclick="setCardCondition(${idx}, 'Good (GD)')" 
-                                    class="flex-1 py-1.5 rounded-lg text-[10px] font-bold ${(card.condition && card.condition.includes('Good')) ? 'bg-white text-night-base border border-white' : 'bg-night-deep text-slate-300 border border-night-border'} transition">
-                                GD (-35%)
-                            </button>
-                        </div>
-                    </div>
-                    ` : `
-                    <div class="bg-night-deep/80 rounded-2xl p-3 border border-night-border flex items-center justify-between text-xs">
-                        <div class="flex items-center gap-2">
-                            <span class="text-slate-300 font-bold">Gecertificeerde Slab:</span>
-                            <span class="font-black px-2.5 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/30">
-                                ${card.gradingCompany || 'SLAB'} ${card.grade || 'Graded'}
-                            </span>
-                        </div>
-                        <span class="text-[10px] text-night-slate">Bron: ${card.priceSource || 'PriceCharting'}</span>
-                    </div>
-                    `}
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                        <a href="${card.directMarketUrl}" target="_blank" rel="noopener noreferrer" 
-                           class="bg-night-deep hover:bg-night-surface text-slate-200 border border-night-border font-bold py-3 px-4 rounded-2xl transition flex items-center justify-center gap-2 text-xs shadow">
-                            <i class="${marketBtnIcon} text-[11px] text-brimi-cyan"></i>
-                            <span>${marketBtnText}</span>
-                        </a>
-
-                        <button type="button" onclick="shareCardToWhatsApp(${idx})" 
-                                class="bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 px-4 rounded-2xl transition flex items-center justify-center gap-2 text-xs shadow-lg cursor-pointer">
-                            <i class="fa-brands fa-whatsapp text-sm"></i>
-                            <span>Bied Aan in WhatsApp Groep</span>
-                        </button>
-                    </div>
-                `;
-
-                cardsContainer.appendChild(cardBox);
-            });
-        }
-
-        window.openPriceModal = function(idx) {
-            editingIndex = idx;
-            const card = lastScannedCards[idx];
-            priceModalCardName.textContent = `Wat is jouw vraagprijs voor ${card.cardName}?`;
-            customPriceInput.value = (card.estimatedPriceEUR || 3.00).toFixed(2);
-            priceModal.classList.remove('hidden');
-            customPriceInput.focus();
-        };
-
-        btnCancelPrice.addEventListener('click', () => priceModal.classList.add('hidden'));
-
-        btnSavePrice.addEventListener('click', () => {
-            const val = parseFloat(customPriceInput.value);
-            if (!isNaN(val) && val >= 0 && editingIndex !== null) {
-                lastScannedCards[editingIndex].estimatedPriceEUR = val;
-                const el = document.getElementById(`price-tag-${editingIndex}`);
-                if (el) el.textContent = `€ ${val.toFixed(2)}`;
-                priceModal.classList.add('hidden');
-                triggerHaptic();
-            }
-        });
-
-        window.shareCardToWhatsApp = function(idx) {
-            const c = lastScannedCards[idx];
-            if (!c) return;
-
-            triggerHaptic();
-            const flag = getFlag(c.languageCode);
-            const price = (typeof c.estimatedPriceEUR === 'number' ? c.estimatedPriceEUR : 3.00).toFixed(2);
-            
-            const numPart = [c.setCode, c.cardNumber ? (c.setTotal ? `${c.cardNumber}/${c.setTotal}` : c.cardNumber) : ''].filter(Boolean).join(' ');
-            const cardIdentifier = numPart ? `${c.cardName} (${numPart})` : c.cardName;
-
-            let conditionStr = c.condition || 'Near Mint (NM)';
-            if (c.isGraded) {
-                conditionStr = `${c.gradingCompany || 'PSA'} ${c.grade || ''} Graded Slab`.trim();
-            }
-
-            // WhatsApp bericht zonder de links naar CM of PC
-            let text = `Hey community! 👋\n\n`;
-            text += `Hierbij bied ik mijn kaart aan:\n\n`;
-            text += `🃏 ${cardIdentifier}\n`;
-            text += `📍 Serie: ${c.setName || 'Pokémon'}\n`;
-            text += `🌐 Taal: ${flag} ${c.language || 'Engels'}\n`;
-            text += `✨ Conditie: ${conditionStr}\n`;
-            text += `💶 Prijs: € ${price}\n\n`;
-            text += `Stuur gerust een berichtje bij interesse! 🤝`;
-
-            window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-        };
-
-        btnShareAll.addEventListener('click', () => {
-            if (!lastScannedCards || lastScannedCards.length === 0) return;
-            triggerHaptic();
-
-            let text = `Hey community! 👋\n\n`;
-            text += `Hierbij bied ik de volgende kaarten aan:\n\n`;
-
-            lastScannedCards.forEach((c, index) => {
-                const flag = getFlag(c.languageCode);
-                const price = (typeof c.estimatedPriceEUR === 'number' ? c.estimatedPriceEUR : 3.00).toFixed(2);
-                const numPart = [c.setCode, c.cardNumber ? (c.setTotal ? `${c.cardNumber}/${c.setTotal}` : c.cardNumber) : ''].filter(Boolean).join(' ');
-                const cardIdentifier = numPart ? `${c.cardName} (${numPart})` : c.cardName;
-
-                let conditionStr = c.condition || 'Near Mint (NM)';
-                if (c.isGraded) {
-                    conditionStr = `${c.gradingCompany || 'PSA'} ${c.grade || ''} Graded Slab`.trim();
-                }
-
-                text += `${index + 1}️⃣ ${cardIdentifier}\n`;
-                text += `   📍 Serie: ${c.setName || 'Pokémon'}\n`;
-                text += `   🌐 Taal: ${flag} ${c.language || 'Engels'}\n`;
-                text += `   ✨ Conditie: ${conditionStr}\n`;
-                text += `   💶 Prijs: € ${price}\n\n`;
-            });
-
-            text += `Stuur gerust een berichtje bij interesse! 🤝`;
-
-            window.location.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-        });
-
-        btnReset.addEventListener('click', resetScanner);
-
-        function resetScanner() {
-            resultsPanel.classList.add('hidden');
-            scanningState.classList.add('hidden');
-            dropContent.classList.remove('hidden');
-            previewWrapper.classList.add('hidden');
-            laserBeam.classList.remove('hidden');
-            btnShareAll.classList.add('hidden');
-            imageDisplay.src = '';
-            fileInput.value = '';
-            lastScannedCards = [];
-        }
-    </script>
+<body class="font-sans antialiased flex flex-col justify-between selection:bg-brand-mint selection:text-brand-bg pb-12">
+<!-- Header in de minimalistische agency-stijl -->
+<header class="border-b border-brand-border/60 bg-brand-bg/90 backdrop-blur-xl sticky top-0 z-40">
+<div class="max-w-2xl mx-auto px-5 py-3.5 flex justify-between items-center">
+<div class="flex items-center gap-3">
+<!-- Geometrisch logo-icoon geïnspireerd op de agency huisstijl -->
+<div class="w-9 h-9 rounded-xl agency-logo-gradient p-[1.5px] shadow-lg flex items-center justify-center">
+<div class="w-full h-full bg-brand-bg rounded-[10px] flex items-center justify-center">
+<svg class="w-5 h-5 text-brand-mint" viewBox="0 0 24 24" fill="none">
+<path d="M4 7L12 3L20 7V17L12 21L4 17V7Z" stroke="url(#agency_grad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12 8L16 12L12 16" stroke="#00e5b0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<defs>
+<linearGradient id="agency_grad" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
+<stop stop-color="#1e5bff"/>
+<stop offset="0.5" stop-color="#00c8ff"/>
+<stop offset="1" stop-color="#00e5b0"/>
+</linearGradient>
+</defs>
+</svg>
+</div>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="text-lg font-black tracking-tight text-white">BRIMI</span>
+<span class="w-1.5 h-1.5 rounded-full bg-brand-mint"></span>
+</div>
+<span class="text-[10px] font-semibold text-brand-textMuted tracking-normal">
+Nederlandse PKMN prijzen checker
+</span>
+</div>
+</div>
+<!-- Clean rechtsboven status-tag -->
+<div class="flex items-center gap-2">
+<span class="text-[11px] font-bold text-brand-textMuted hidden sm:inline">LIVE ENGINE</span>
+<span class="w-2 h-2 rounded-full bg-brand-mint animate-pulse"></span>
+</div>
+</div>
+</header>
+<main class="max-w-2xl mx-auto w-full px-5 py-8 flex-grow flex flex-col gap-7">
+<!-- Hero Kop in de kenmerkende typografische agency-stijl -->
+<div class="space-y-2 text-left sm:text-center">
+<h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
+Scan je kaart.<br class="sm:hidden" />
+<span class="text-brand-mint">Weet direct de waarde.</span>
+</h1>
+<p class="text-sm text-brand-textMuted font-medium max-w-md sm:mx-auto">
+Cardmarket NL voor losse kaarten en PriceCharting veilingkoersen voor gecertificeerde slabs.
+</p>
+</div>
+<!-- Scanner Viewfinder Card -->
+<div class="w-full">
+<label for="file-input" id="drop-zone" class="agency-card relative block rounded-3xl p-7 sm:p-11 text-center cursor-pointer transition-all duration-300 group hover:border-brand-mint/40 active:scale-[0.99]">
+<input type="file" id="file-input" class="hidden" accept="image/*">
+<div class="vf-corner vf-tl"></div>
+<div class="vf-corner vf-tr"></div>
+<div class="vf-corner vf-bl"></div>
+<div class="vf-corner vf-br"></div>
+<div id="drop-content" class="flex flex-col items-center justify-center space-y-4 pointer-events-none py-3">
+<div class="w-16 h-16 rounded-2xl bg-brand-surface border border-brand-border flex items-center justify-center text-2xl group-hover:scale-105 group-hover:border-brand-mint/50 transition-all duration-300 shadow-xl">
+<i class="fa-solid fa-camera text-brand-textMuted group-hover:text-brand-mint transition-colors"></i>
+</div>
+<div class="space-y-1">
+<p class="text-base font-extrabold text-white">
+Maak een foto of kies uit bibliotheek
+</p>
+<p class="text-xs text-brand-textMuted font-medium">
+Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
+</p>
+</div>
+<!-- Kenmerkende Pill Action Button in fel Mint/Cyan -->
+<span class="agency-glow-btn inline-flex items-center gap-2 font-extrabold px-6 py-3 rounded-full text-xs transition shadow-lg mt-1">
+<span>Foto Maken of Uploaden</span>
+<i class="fa-solid fa-arrow-right text-[11px]"></i>
+</span>
+</div>
+<div id="preview-wrapper" class="hidden relative rounded-2xl overflow-hidden max-h-[350px] bg-black/80 flex items-center justify-center border border-brand-border">
+<img id="image-display" src="" alt="Gescande Pokémon kaart" class="max-h-[330px] w-auto object-contain rounded-xl">
+<div id="laser-beam" class="hidden laser-sweep"></div>
+</div>
+</label>
+</div>
+<!-- Scanning State Box -->
+<div id="scanning-state" class="hidden w-full agency-card rounded-2xl p-5 text-center space-y-3">
+<div class="flex items-center justify-center gap-3">
+<i class="fa-solid fa-circle-notch fa-spin text-brand-mint text-sm"></i>
+<h3 id="status-title" class="text-xs font-black tracking-wider text-white uppercase">Kaart analyseren...</h3>
+</div>
+<p id="status-subtitle" class="text-[11px] text-brand-textMuted">Leest serie, nummer en checkt actuele koersen...</p>
+<div class="w-full bg-brand-bg rounded-full h-1.5 overflow-hidden border border-brand-border">
+<div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-300 rounded-full" style="width: 40%"></div>
+</div>
+</div>
+<!-- Results Panel -->
+<div id="results-panel" class="hidden w-full space-y-4">
+<div class="flex items-center justify-between px-1 gap-2 flex-wrap">
+<span class="text-xs font-black tracking-wider uppercase text-brand-mint flex items-center gap-2">
+<i class="fa-solid fa-circle-check"></i>
+<span id="results-count-label">Scan Resultaat</span>
+</span>
+<div class="flex items-center gap-2">
+<button type="button" id="btn-share-all" class="hidden agency-glow-btn text-xs font-extrabold px-4 py-2 rounded-full transition flex items-center gap-1.5 cursor-pointer shadow-md">
+<i class="fa-brands fa-whatsapp text-sm"></i> Bied Alles Aan
+</button>
+<button type="button" id="btn-reset" class="bg-brand-surface hover:bg-brand-surface/80 text-white text-xs font-bold px-4 py-2 rounded-full border border-brand-border transition flex items-center gap-1.5 cursor-pointer">
+<i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Nieuwe Scan
+</button>
+</div>
+</div>
+<div id="cards-container" class="space-y-4"></div>
+</div>
+<!-- Onderste 3 Voordelenblokken in de agency-stijl (zoals in image 12) -->
+<div class="pt-6 border-t border-brand-border/60 space-y-4">
+<div class="space-y-1">
+<p class="text-[11px] font-bold uppercase tracking-widest text-brand-mint">Waarom BRIMI Scanner?</p>
+<h3 class="text-lg font-extrabold text-white">Geen gedoe. Direct resultaat.</h3>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+<!-- Blok 1 -->
+<div class="agency-card rounded-2xl p-5 space-y-2 border border-brand-border">
+<div class="w-9 h-9 rounded-xl bg-brand-surface border border-brand-border text-brand-mint flex items-center justify-center text-sm">
+<i class="fa-solid fa-bolt"></i>
+</div>
+<h4 class="text-sm font-extrabold text-white">Geen Urenlang Speurwerk</h4>
+<p class="text-xs text-brand-textMuted leading-relaxed">
+Stop met eindeloos handmatig zoeken op internet. Binnen één seconde zie je direct wat de actuele Nederlandse marktwaarde is.
+</p>
+</div>
+<!-- Blok 2 -->
+<div class="agency-card rounded-2xl p-5 space-y-2 border border-brand-border">
+<div class="w-9 h-9 rounded-xl bg-brand-surface border border-brand-border text-brand-cyan flex items-center justify-center text-sm">
+<i class="fa-solid fa-gem"></i>
+</div>
+<h4 class="text-sm font-extrabold text-white">PriceCharting Slab Koersen</h4>
+<p class="text-xs text-brand-textMuted leading-relaxed">
+Herkent PSA-, CGC- en Beckett-labels en toont direct de werkelijke veilingwaarde van de graded slab.
+</p>
+</div>
+<!-- Blok 3 -->
+<div class="agency-card rounded-2xl p-5 space-y-2 border border-brand-border">
+<div class="w-9 h-9 rounded-xl bg-brand-surface border border-brand-border text-brand-mint flex items-center justify-center text-sm">
+<i class="fa-brands fa-whatsapp"></i>
+</div>
+<h4 class="text-sm font-extrabold text-white">1-Tik Community Aanbod</h4>
+<p class="text-xs text-brand-textMuted leading-relaxed">
+Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief jouw vraagprijs en de conditie.
+</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Modal: Prijs Aanpassen -->
+<div id="price-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+<div class="agency-card max-w-xs w-full rounded-3xl p-6 text-center space-y-4 border border-brand-border">
+<div class="space-y-1">
+<h4 class="text-base font-extrabold text-white">Pas Vraagprijs Aan</h4>
+<p class="text-xs text-brand-textMuted" id="price-modal-card-name">Wat vraag je voor de kaart?</p>
+</div>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-brand-textMuted font-bold font-mono">€</span>
+<input type="number" step="0.05" id="custom-price-input" class="w-full bg-brand-surface border border-brand-border focus:border-brand-mint rounded-2xl py-3 pl-9 pr-4 text-white font-mono font-bold text-xl text-center outline-none transition">
+</div>
+<div class="flex gap-2">
+<button type="button" id="btn-cancel-price" class="flex-1 bg-brand-surface hover:bg-brand-surface/80 text-brand-textMuted font-bold py-2.5 rounded-full text-xs transition cursor-pointer border border-brand-border">
+Annuleren
+</button>
+<button type="button" id="btn-save-price" class="flex-1 agency-glow-btn font-extrabold py-2.5 rounded-full text-xs transition cursor-pointer">
+Opslaan
+</button>
+</div>
+</div>
+</div>
+<!-- Modal: Notificatie -->
+<div id="notify-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+<div class="agency-card max-w-sm w-full rounded-3xl p-6 text-center space-y-4 border border-brand-border">
+<div class="w-11 h-11 rounded-2xl bg-brand-surface border border-brand-border text-brand-mint flex items-center justify-center mx-auto text-lg">
+<i class="fa-solid fa-circle-exclamation"></i>
+</div>
+<div class="space-y-1">
+<h4 id="notify-title" class="text-base font-extrabold text-white">Bericht</h4>
+<p id="notify-desc" class="text-xs text-brand-textMuted leading-relaxed"></p>
+</div>
+<button type="button" id="notify-close" class="w-full agency-glow-btn font-extrabold py-3 rounded-full text-xs transition cursor-pointer">
+Begrepen
+</button>
+</div>
+</div>
+<script>
+const BACKEND_URL = "https://brimi-scanner.onrender.com";
+// Pre-warm ping naar Render
+window.addEventListener('DOMContentLoaded', () => {
+fetch(⁠${BACKEND_URL}/⁠).catch(() => {});
+});
+const fileInput = document.getElementById('file-input');
+const dropContent = document.getElementById('drop-content');
+const previewWrapper = document.getElementById('preview-wrapper');
+const imageDisplay = document.getElementById('image-display');
+const laserBeam = document.getElementById('laser-beam');
+const scanningState = document.getElementById('scanning-state');
+const resultsPanel = document.getElementById('results-panel');
+const cardsContainer = document.getElementById('cards-container');
+const resultsCountLabel = document.getElementById('results-count-label');
+const btnShareAll = document.getElementById('btn-share-all');
+const statusTitle = document.getElementById('status-title');
+const statusSubtitle = document.getElementById('status-subtitle');
+const progressBar = document.getElementById('progress-bar');
+const btnReset = document.getElementById('btn-reset');
+const notifyModal = document.getElementById('notify-modal');
+const notifyTitle = document.getElementById('notify-title');
+const notifyDesc = document.getElementById('notify-desc');
+const notifyClose = document.getElementById('notify-close');
+const priceModal = document.getElementById('price-modal');
+const priceModalCardName = document.getElementById('price-modal-card-name');
+const customPriceInput = document.getElementById('custom-price-input');
+const btnCancelPrice = document.getElementById('btn-cancel-price');
+const btnSavePrice = document.getElementById('btn-save-price');
+let lastScannedCards = [];
+let editingIndex = null;
+function playChime() {
+try {
+const ctx = new (window.AudioContext || window.webkitAudioContext)();
+const osc = ctx.createOscillator();
+const gain = ctx.createGain();
+osc.connect(gain);
+gain.connect(ctx.destination);
+osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+osc.frequency.exponentialRampToValueAtTime(880.00, ctx.currentTime + 0.14);
+gain.gain.setValueAtTime(0.15, ctx.currentTime);
+gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+osc.start();
+osc.stop(ctx.currentTime + 0.35);
+} catch(e) {}
+}
+function triggerHaptic() {
+if (navigator.vibrate) navigator.vibrate(35);
+}
+function showNotification(title, message) {
+notifyTitle.textContent = title;
+notifyDesc.textContent = message;
+notifyModal.classList.remove('hidden');
+}
+notifyClose.addEventListener('click', () => notifyModal.classList.add('hidden'));
+fileInput.addEventListener('change', (e) => {
+if (e.target.files && e.target.files.length > 0) {
+const file = e.target.files[0];
+if (!file.type.startsWith('image/')) {
+showNotification('Ongeldig bestand', 'Selecteer een duidelijke foto van je Pokémon kaart(en).');
+return;
+}
+const reader = new FileReader();
+reader.onload = (evt) => {
+const img = new Image();
+img.onload = () => {
+const canvas = document.createElement('canvas');
+let w = img.width;
+let h = img.height;
+const maxDim = 850;
+if (w > maxDim || h > maxDim) {
+if (w > h) {
+h = Math.round((h * maxDim) / w);
+w = maxDim;
+} else {
+w = Math.round((w * maxDim) / h);
+h = maxDim;
+}
+}
+canvas.width = w;
+canvas.height = h;
+const ctx = canvas.getContext('2d');
+ctx.drawImage(img, 0, 0, w, h);
+const compressed = canvas.toDataURL('image/jpeg', 0.82);
+imageDisplay.src = compressed;
+const base64Data = compressed.split(',')[1];
+dropContent.classList.add('hidden');
+previewWrapper.classList.remove('hidden');
+laserBeam.classList.remove('hidden');
+executeScan(base64Data);
+};
+img.src = evt.target.result;
+};
+reader.readAsDataURL(file);
+}
+});
+async function executeScan(base64Data) {
+scanningState.classList.remove('hidden');
+resultsPanel.classList.add('hidden');
+cardsContainer.innerHTML = '';
+statusTitle.textContent = "Analyseren...";
+statusSubtitle.textContent = "Leest serie, nummer en checkt actuele koersen...";
+progressBar.style.width = "40%";
+try {
+setTimeout(() => { progressBar.style.width = "80%"; }, 900);
+const response = await fetch(⁠${BACKEND_URL}/api/scan⁠, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+image_base64: base64Data,
+mime_type: 'image/jpeg'
+})
+});
+if (!response.ok) {
+const err = await response.json().catch(() => ({}));
+throw new Error(err.detail || ⁠Server fout (HTTP ${response.status})⁠);
+}
+const cards = await response.json();
+if (!cards || cards.length === 0) {
+throw new Error("Geen Pokémon kaart herkend. Zorg voor voldoende licht.");
+}
+lastScannedCards = cards;
+playChime();
+triggerHaptic();
+renderResults(lastScannedCards);
+} catch (err) {
+console.error("Scan error:", err);
+showNotification("Scan Probleem", err.message || "Er ging iets mis tijdens de scan.");
+resetScanner();
+} finally {
+laserBeam.classList.add('hidden');
+scanningState.classList.add('hidden');
+}
+}
+function getFlag(code) {
+const c = (code || 'EN').toUpperCase();
+if (c === 'EN') return '🇬🇧';
+if (c === 'JP') return '🇯🇵';
+if (c === 'CN' || c === 'ZH') return '🇨🇳';
+return '🌐';
+}
+window.setCardCondition = function(idx, condition) {
+triggerHaptic();
+const card = lastScannedCards[idx];
+if (!card || card.isGraded) return;
+card.condition = condition;
+const baseNM = card.basePriceNM || card.estimatedPriceEUR || 3.00;
+if (condition.includes('Near Mint')) {
+card.estimatedPriceEUR = baseNM;
+} else if (condition.includes('Light Played')) {
+card.estimatedPriceEUR = Math.max(1.0, roundPrice(baseNM * 0.82));
+} else if (condition.includes('Good')) {
+card.estimatedPriceEUR = Math.max(0.75, roundPrice(baseNM * 0.65));
+}
+const priceTag = document.getElementById(⁠price-tag-${idx}⁠);
+if (priceTag) priceTag.textContent = ⁠€ ${card.estimatedPriceEUR.toFixed(2)}⁠;
+['NM', 'LP', 'GD'].forEach(c => {
+const btn = document.getElementById(⁠cond-btn-${idx}-${c}⁠);
+if (!btn) return;
+if ((c === 'NM' && condition.includes('Near Mint')) ||
+(c === 'LP' && condition.includes('Light Played')) ||
+(c === 'GD' && condition.includes('Good'))) {
+btn.className = "flex-1 py-2 rounded-xl text-[10px] font-black agency-glow-btn transition";
+} else {
+btn.className = "flex-1 py-2 rounded-xl text-[10px] font-bold bg-brand-surface text-brand-textMuted border border-brand-border hover:text-white transition";
+}
+});
+};
+function roundPrice(val) {
+return Math.round(val * 20) / 20;
+}
+function renderResults(cards) {
+resultsPanel.classList.remove('hidden');
+cardsContainer.innerHTML = '';
+const totalCards = cards.length;
+resultsCountLabel.textContent = totalCards === 1 ? '1 Kaart Gevonden' : ⁠${totalCards} Kaarten Gevonden⁠;
+if (totalCards > 1) {
+btnShareAll.classList.remove('hidden');
+} else {
+btnShareAll.classList.add('hidden');
+}
+cards.forEach((card, idx) => {
+const price = typeof card.estimatedPriceEUR === 'number' ? card.estimatedPriceEUR : 3.00;
+const flag = getFlag(card.languageCode);
+const isChinese = card.isChinese || (card.languageCode === 'CN');
+const isSlab = card.isGraded || Boolean(card.gradingCompany);
+let marketBtnText = "Check Cardmarket NL";
+let marketBtnIcon = "fa-solid fa-arrow-up-right-from-square";
+if (isSlab) {
+marketBtnText = "Check PriceCharting Koers";
+marketBtnIcon = "fa-solid fa-chart-line";
+} else if (isChinese) {
+marketBtnText = "Check eBay Sold";
+}
+const cardBox = document.createElement('div');
+cardBox.className = "agency-card rounded-3xl p-6 sm:p-7 space-y-5 border border-brand-border";
+cardBox.innerHTML = ⁠<div class="flex items-start justify-between gap-3"> <div class="space-y-1.5"> <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold"> <span class="bg-brand-surface text-brand-cyan px-3 py-1 rounded-lg border border-brand-border font-mono font-bold"> ${card.setCode || 'SET'} ${card.cardNumber || ''}${card.setTotal ? '/' + card.setTotal : ''} </span> <span class="bg-brand-surface text-white px-3 py-1 rounded-lg border border-brand-border flex items-center gap-1.5"> <span>${flag}</span> <span>${card.language || 'Engels'}</span> </span> ${isSlab ?⁠
+<span class="bg-brand-mint/10 text-brand-mint border border-brand-mint/30 px-3 py-1 rounded-lg font-extrabold flex items-center gap-1.5">
+<i class="fa-solid fa-gem text-[10px]"></i>
+<span>￼{card.grade || ''}</span>
+</span>
+` : ''}
+</div>
+<h2 class="text-2xl font-black text-white tracking-tight">￼
+<p class="text-xs text-brand-textMuted font-medium">{card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
+</div>
+<div class="text-right shrink-0">
+<span class="text-[10px] text-brand-textMuted uppercase font-extrabold tracking-wider block">
+${isSlab ? 'Slab Waarde' : 'Vraagprijs / NL'}
+</span>
+<button type="button" onclick="openPriceModal(${idx})" class="group flex items-center gap-2 bg-brand-surface hover:border-brand-mint/60 border border-brand-border px-4 py-2 rounded-2xl transition cursor-pointer mt-1">
+<span id="price-tag-${idx}" class="text-2xl font-black text-brand-mint font-mono">€ ${price.toFixed(2)}</span>
+<i class="fa-solid fa-pen text-[10px] text-brand-textMuted group-hover:text-brand-mint transition"></i>
+</button>
+<span class="text-[9px] text-brand-textMuted block mt-1">Tik om aan te passen</span>
+</div>
+</div>
+${!isSlab ? ⁠<div class="bg-brand-surface/70 rounded-2xl p-3.5 border border-brand-border space-y-2"> <div class="flex items-center justify-between text-xs"> <span class="text-white font-extrabold">Kies Conditie:</span> <span class="text-[10px] text-brand-textMuted">Past vraagprijs direct aan</span> </div> <div class="flex gap-2"> <button type="button" id="cond-btn-${idx}-NM" onclick="setCardCondition(${idx}, 'Near Mint (NM)')"  class="flex-1 py-2 rounded-xl text-[10px] font-black ${(!card.condition || card.condition.includes('Near Mint')) ? 'agency-glow-btn' : 'bg-brand-surface text-brand-textMuted border border-brand-border'} transition"> NM </button> <button type="button" id="cond-btn-${idx}-LP" onclick="setCardCondition(${idx}, 'Light Played (LP)')"  class="flex-1 py-2 rounded-xl text-[10px] font-bold ${(card.condition && card.condition.includes('Light Played')) ? 'agency-glow-btn' : 'bg-brand-surface text-brand-textMuted border border-brand-border'} transition"> LP (-15%) </button> <button type="button" id="cond-btn-${idx}-GD" onclick="setCardCondition(${idx}, 'Good (GD)')"  class="flex-1 py-2 rounded-xl text-[10px] font-bold ${(card.condition && card.condition.includes('Good')) ? 'agency-glow-btn' : 'bg-brand-surface text-brand-textMuted border border-brand-border'} transition"> GD (-35%) </button> </div> </div>⁠ : ⁠<div class="bg-brand-surface/70 rounded-2xl p-3.5 border border-brand-border flex items-center justify-between text-xs"> <div class="flex items-center gap-2"> <span class="text-white font-bold">Gecertificeerde Slab:</span> <span class="font-extrabold px-3 py-1 rounded-full bg-brand-mint/10 text-brand-mint border border-brand-mint/30"> ${card.gradingCompany \vert{}\vert{} 'SLAB'}${card.grade || 'Graded'} </span> </div> <span class="text-[10px] text-brand-textMuted">Bron: ${card.priceSource || 'PriceCharting'}</span> </div>⁠}
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+<a href="${card.directMarketUrl}" target="_blank" rel="noopener noreferrer" 
+class="bg-brand-surface hover:bg-brand-surface/80 text-white border border-brand-border font-bold py-3.5 px-4 rounded-full transition flex items-center justify-center gap-2 text-xs">
+<i class="${marketBtnIcon} text-[11px] text-brand-cyan"></i>
+<span>${marketBtnText}</span>
+</a>
+<button type="button" onclick="shareCardToWhatsApp(${idx})" 
+class="agency-glow-btn font-extrabold py-3.5 px-4 rounded-full transition flex items-center justify-center gap-2 text-xs shadow-lg cursor-pointer">
+<i class="fa-brands fa-whatsapp text-sm"></i>
+<span>Bied Aan in WhatsApp Groep</span>
+</button>
+</div>
+`;
+cardsContainer.appendChild(cardBox);
+});
+}
+window.openPriceModal = function(idx) {
+editingIndex = idx;
+const card = lastScannedCards[idx];
+priceModalCardName.textContent = ⁠Wat is jouw vraagprijs voor ${card.cardName}?⁠;
+customPriceInput.value = (card.estimatedPriceEUR || 3.00).toFixed(2);
+priceModal.classList.remove('hidden');
+customPriceInput.focus();
+};
+btnCancelPrice.addEventListener('click', () => priceModal.classList.add('hidden'));
+btnSavePrice.addEventListener('click', () => {
+const val = parseFloat(customPriceInput.value);
+if (!isNaN(val) && val >= 0 && editingIndex !== null) {
+lastScannedCards[editingIndex].estimatedPriceEUR = val;
+const el = document.getElementById(⁠price-tag-${editingIndex}⁠);
+if (el) el.textContent = ⁠€ ${val.toFixed(2)}⁠;
+priceModal.classList.add('hidden');
+triggerHaptic();
+}
+});
+window.shareCardToWhatsApp = function(idx) {
+const c = lastScannedCards[idx];
+if (!c) return;
+triggerHaptic();
+const flag = getFlag(c.languageCode);
+const price = (typeof c.estimatedPriceEUR === 'number' ? c.estimatedPriceEUR : 3.00).toFixed(2);
+const numPart = [c.setCode, c.cardNumber ? (c.setTotal ? ⁠${c.cardNumber}/${c.setTotal}⁠ : c.cardNumber) : ''].filter(Boolean).join(' ');
+const cardIdentifier = numPart ? ⁠${c.cardName} (${numPart})⁠ : c.cardName;
+let conditionStr = c.condition || 'Near Mint (NM)';
+if (c.isGraded) {
+conditionStr = ⁠${c.gradingCompany || 'PSA'} ${c.grade || ''} Graded Slab⁠.trim();
+}
+let text = ⁠Hey community! 👋\n\n⁠;
+text += ⁠Hierbij bied ik mijn kaart aan:\n\n⁠;
+text += ⁠🃏 ${cardIdentifier}\n⁠;
+text += ⁠📍 Serie: ${c.setName || 'Pokémon'}\n⁠;
+text += ⁠🌐 Taal: ${flag} ${c.language || 'Engels'}\n⁠;
+text += ⁠✨ Conditie: ${conditionStr}\n⁠;
+text += ⁠💶 Prijs: € ${price}\n\n⁠;
+text += ⁠Stuur gerust een berichtje bij interesse! 🤝⁠;
+window.location.href = ⁠https://api.whatsapp.com/send?text=${encodeURIComponent(text)}⁠;
+};
+btnShareAll.addEventListener('click', () => {
+if (!lastScannedCards || lastScannedCards.length === 0) return;
+triggerHaptic();
+let text = ⁠Hey community! 👋\n\n⁠;
+text += ⁠Hierbij bied ik de volgende kaarten aan:\n\n⁠;
+lastScannedCards.forEach((c, index) => {
+const flag = getFlag(c.languageCode);
+const price = (typeof c.estimatedPriceEUR === 'number' ? c.estimatedPriceEUR : 3.00).toFixed(2);
+const numPart = [c.setCode, c.cardNumber ? (c.setTotal ? ⁠${c.cardNumber}/${c.setTotal}⁠ : c.cardNumber) : ''].filter(Boolean).join(' ');
+const cardIdentifier = numPart ? ⁠${c.cardName} (${numPart})⁠ : c.cardName;
+let conditionStr = c.condition || 'Near Mint (NM)';
+if (c.isGraded) {
+conditionStr = ⁠${c.gradingCompany || 'PSA'} ${c.grade || ''} Graded Slab⁠.trim();
+}
+text += ⁠${index + 1}️⃣ ${cardIdentifier}\n⁠;
+text += ⁠   📍 Serie: ${c.setName || 'Pokémon'}\n⁠;
+text += ⁠   🌐 Taal: ${flag} ${c.language || 'Engels'}\n⁠;
+text += ⁠   ✨ Conditie: ${conditionStr}\n⁠;
+text += ⁠   💶 Prijs: € ${price}\n\n⁠;
+});
+text += ⁠Stuur gerust een berichtje bij interesse! 🤝⁠;
+window.location.href = ⁠https://api.whatsapp.com/send?text=${encodeURIComponent(text)}⁠;
+});
+btnReset.addEventListener('click', resetScanner);
+function resetScanner() {
+resultsPanel.classList.add('hidden');
+scanningState.classList.add('hidden');
+dropContent.classList.remove('hidden');
+previewWrapper.classList.add('hidden');
+laserBeam.classList.remove('hidden');
+btnShareAll.classList.add('hidden');
+imageDisplay.src = '';
+fileInput.value = '';
+lastScannedCards = [];
+}
+</script>
 </body>
 </html>
