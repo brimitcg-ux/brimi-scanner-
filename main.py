@@ -10,9 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Scanner Engine", version="8.3.0")
+app = FastAPI(title="BRIMI Scanner Engine", version="8.5.0")
 
-# Volledige, officiële CORS-ondersteuning voor alle browsers en mobiele toestellen
+# Volledige CORS-ondersteuning voor iOS Safari en web-apps
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -63,10 +63,10 @@ async def scan_cards(payload: ScanRequest):
     if not key:
         return JSONResponse(
             status_code=500,
-            content={"detail": "GEMINI_API_KEY ontbreekt in Render Environment Variables. Voeg deze toe in het Render dashboard."}
+            content={"detail": "GEMINI_API_KEY ontbreekt in Render Environment Variables."}
         )
 
-    # Sanitizeer base64 invoer
+    # Sanitizeer de base64 payload
     clean_b64 = payload.image_base64
     if "," in clean_b64:
         clean_b64 = clean_b64.split(",", 1)[1]
@@ -130,13 +130,32 @@ Output UITSLUITEND een geldige JSON array:
         }
     }
 
-    # Officiële actieve modellen
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
     raw_text = ""
     last_error = ""
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for model_name in models_to_try:
+    async with httpx.AsyncClient(timeout=35.0) as client:
+        # Stap 1: Dynamisch actieve modellen ophalen die specifiek voor deze sleutel werken
+        candidate_models = []
+        try:
+            m_res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
+            if m_res.status_code == 200:
+                m_data = m_res.json()
+                for m in m_data.get("models", []):
+                    methods = m.get("supportedGenerationMethods", [])
+                    name = m.get("name", "")
+                    if "generateContent" in methods and "flash" in name.lower():
+                        clean_name = name.replace("models/", "")
+                        candidate_models.append(clean_name)
+        except Exception:
+            pass
+
+        # Stap 2: Voeg actuele standaard flash-modellen toe als fallback
+        for fallback in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-001", "gemini-flash-latest"]:
+            if fallback not in candidate_models:
+                candidate_models.append(fallback)
+
+        # Stap 3: Analyse uitvoeren met het eerste beschikbare model
+        for model_name in candidate_models:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             try:
                 res = await client.post(url, json=gemini_body)
