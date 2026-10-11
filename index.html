@@ -199,22 +199,22 @@
             </label>
         </div>
 
-        <!-- Scanning State Box -->
+        <!-- Scanning State Box (Dynamische Voortgangsteksten) -->
         <div id="scanning-state" class="hidden agency-card rounded-2xl p-5 border-brand-mint/30 space-y-3">
             <div class="flex items-center justify-between text-xs">
                 <span id="status-title" class="font-extrabold text-brand-mint flex items-center gap-2">
                     <i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i>
-                    Foto verwerken...
+                    Foto optimaliseren...
                 </span>
                 <span class="text-brand-textMuted font-semibold">Live Analyse</span>
             </div>
 
             <div class="w-full bg-[#040812] h-2 rounded-full overflow-hidden border border-brand-border">
-                <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-500 rounded-full" style="width: 35%"></div>
+                <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-300 rounded-full" style="width: 25%"></div>
             </div>
 
             <p id="status-subtitle" class="text-xs text-brand-textMuted font-medium">
-                Zoekt laagste Cardmarket NL prijzen...
+                Afbeelding klaarmaken voor AI herkenning...
             </p>
         </div>
 
@@ -225,7 +225,7 @@
                 <div class="space-y-1 w-full">
                     <p class="text-sm font-bold text-white" id="retry-title">Scan Probleem</p>
                     <p class="text-xs text-brand-textMuted leading-relaxed" id="retry-desc">
-                        De verbinding kon niet worden voltooid. Tik op opnieuw proberen om de scan te voltooien.
+                        De scan kon niet worden voltooid. Tik op opnieuw proberen om het nogmaals uit te voeren.
                     </p>
                 </div>
             </div>
@@ -238,17 +238,24 @@
 
         <!-- Resultaten Sectie -->
         <div id="results-panel" class="hidden space-y-4">
-            <div class="flex items-center justify-between px-1">
+            <div class="flex flex-wrap items-center justify-between gap-2 px-1">
                 <span id="card-counter" class="text-xs font-extrabold tracking-wider text-brand-mint flex items-center gap-2">
                     <i class="fa-solid fa-circle-check"></i>
                     1 KAART GEVONDEN
                 </span>
 
                 <div class="flex items-center gap-2">
-                    <button id="bulk-whatsapp-btn" class="hidden text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 px-3.5 py-1.5 rounded-full font-bold transition flex items-center gap-1.5">
+                    <!-- Bulk Kopiëren Knop -->
+                    <button id="bulk-copy-btn" class="hidden text-xs bg-brand-surface text-brand-textMuted hover:text-white border border-brand-border hover:border-brand-mint/50 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1.5">
+                        <i class="fa-regular fa-copy"></i>
+                        <span>Kopieer Alles</span>
+                    </button>
+                    <!-- Bulk WhatsApp Knop -->
+                    <button id="bulk-whatsapp-btn" class="hidden text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1.5">
                         <i class="fa-brands fa-whatsapp"></i>
                         <span>Bied Alles Aan</span>
                     </button>
+                    <!-- Nieuwe Scan Knop -->
                     <button id="reset-btn" class="text-xs text-brand-textMuted hover:text-white bg-brand-surface border border-brand-border px-3.5 py-1.5 rounded-full font-bold transition flex items-center gap-1.5">
                         <i class="fa-solid fa-rotate-left"></i>
                         <span>Nieuwe Scan</span>
@@ -333,12 +340,13 @@
         const cardsContainer = document.getElementById('cards-container');
         const cardCounter = document.getElementById('card-counter');
         const bulkWhatsappBtn = document.getElementById('bulk-whatsapp-btn');
+        const bulkCopyBtn = document.getElementById('bulk-copy-btn');
         const resetBtn = document.getElementById('reset-btn');
 
         let currentCards = [];
         let lastProcessedBase64 = null;
 
-        // Achtergrond ping bij opstarten
+        // Achtergrond ping bij openen van de pagina
         fetch(`${API_BASE}/`, { method: 'GET', cache: 'no-store' }).catch(() => {});
 
         fileInput.addEventListener('change', (e) => {
@@ -352,9 +360,10 @@
             resultsPanel.classList.add('hidden');
             retryBox.classList.add('hidden');
 
-            statusTitle.textContent = "Foto optimaliseren...";
-            statusSubtitle.textContent = "Afbeelding klaarmaken voor analyse...";
-            progressBar.style.width = "25%";
+            // Stap 1 voortgang
+            statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Foto optimaliseren...`;
+            statusSubtitle.textContent = "Foto comprimeren voor snelle upload...";
+            progressBar.style.width = "20%";
 
             const objectUrl = URL.createObjectURL(file);
             const img = new Image();
@@ -365,7 +374,9 @@
                 const canvas = document.createElement('canvas');
                 let w = img.naturalWidth || img.width;
                 let h = img.naturalHeight || img.height;
-                const maxDim = 1000;
+                
+                // Quick-Win C: 800px max dimensie voor 60% lichtere payload
+                const maxDim = 800;
 
                 if (w > maxDim || h > maxDim) {
                     if (w > h) {
@@ -382,7 +393,8 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
 
-                const compressed = canvas.toDataURL('image/jpeg', 0.82);
+                // Quick-Win C: 0.70 jpeg compressie (licht & vlijmscherp voor OCR)
+                const compressed = canvas.toDataURL('image/jpeg', 0.70);
                 imageDisplay.src = compressed;
                 lastProcessedBase64 = compressed.split(',')[1];
 
@@ -399,15 +411,17 @@
         });
 
         async function executeScan(base64Data) {
-            statusTitle.textContent = "Kaart & Nummer herkennen...";
-            statusSubtitle.textContent = "Setcode en zeldzaamheid identificeren...";
-            progressBar.style.width = "45%";
+            // Stap 2 voortgang: AI OCR
+            statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Kaart & Nummer herkennen...`;
+            statusSubtitle.textContent = "AI identificeert kaartnummer en setcode...";
+            progressBar.style.width = "50%";
 
+            // Stap 3 voortgang: TCGdex & beurskoersen na 800ms
             const progressTimer = setTimeout(() => {
-                statusTitle.textContent = "Cardmarket NL raadplegen...";
-                statusSubtitle.textContent = "Zoekt laagste actuele prijs van NL verkopers...";
-                progressBar.style.width = "80%";
-            }, 1200);
+                statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Cardmarket koers ophalen...`;
+                statusSubtitle.textContent = "Officiële beurskoersen en bodemprijzen raadplegen...";
+                progressBar.style.width = "85%";
+            }, 800);
 
             try {
                 const response = await fetch(`${API_BASE}/api/scan`, {
@@ -435,6 +449,11 @@
 
                 const data = await response.json();
                 progressBar.style.width = "100%";
+
+                // Haptische feedback (Trillen bij succesvolle herkenning op mobiel)
+                if (navigator.vibrate) {
+                    try { navigator.vibrate(50); } catch(e) {}
+                }
 
                 setTimeout(() => {
                     scanningState.classList.add('hidden');
@@ -472,7 +491,7 @@
                 return;
             }
 
-            currentCards = cards.map((c, i) => ({
+            let mappedCards = cards.map((c, i) => ({
                 id: i,
                 name: c.cardName || 'Pokémon Kaart',
                 number: c.cardNumber || '?',
@@ -496,8 +515,16 @@
                 priceSource: c.priceSource || 'Cardmarket NL'
             }));
 
+            // Verbetering 2: Automatisch sorteren op waarde (duurste kaart bovenaan)
+            mappedCards.sort((a, b) => b.currentPrice - a.currentPrice);
+            // Re-index na sorteren
+            currentCards = mappedCards.map((c, idx) => ({ ...c, id: idx }));
+
             cardCounter.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${currentCards.length} KAART${currentCards.length > 1 ? 'EN' : ''} GEVONDEN`;
-            bulkWhatsappBtn.classList.toggle('hidden', currentCards.length <= 1);
+            
+            const isMultiple = currentCards.length > 1;
+            bulkWhatsappBtn.classList.toggle('hidden', !isMultiple);
+            bulkCopyBtn.classList.toggle('hidden', !isMultiple);
 
             cardsContainer.innerHTML = '';
             currentCards.forEach(renderSingleCard);
@@ -512,6 +539,15 @@
                 'DE': '🇩🇪', 'FR': '🇫🇷'
             };
             return map[String(code).toUpperCase()] || '🌐';
+        }
+
+        function generateCardText(card) {
+            const flag = getFlag(card.languageCode);
+            const numLabel = card.setTotal ? `${card.number}/${card.setTotal}` : `${card.number}`;
+            const setCodeLabel = card.setCode ? `${card.setCode} ` : '';
+            const certLine = (card.isGraded && card.certNumber) ? `\n🏷️ Certificaat: #${card.certNumber}` : '';
+
+            return `Hey community! 👋\n\nHierbij bied ik mijn kaart aan:\n\n🃏 ${card.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${card.setName}\n🌐 Taal: ${flag} ${card.language}\n✨ Conditie: ${card.condition}${certLine}\n💶 Prijs: € ${card.currentPrice.toFixed(2)}\n\nStuur gerust een berichtje bij interesse! 🤝`;
         }
 
         function renderSingleCard(card) {
@@ -570,12 +606,12 @@
             const marketBtnIcon = card.isGraded ? 'fa-chart-line' : 'fa-arrow-up-right-from-square';
             const marketBtnText = card.isGraded ? 'Bekijk PriceCharting Koers' : 'Bekijk op Cardmarket NL';
 
-            const isNlBodem = card.priceSource.includes("Bodem");
-            const sourceBadgeColor = isNlBodem
+            const isBodem = card.priceSource.includes("Bodem");
+            const sourceBadgeColor = isBodem
                 ? "text-brand-mint bg-brand-mint/10 border-brand-mint/30" 
                 : (card.isGraded ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-brand-cyan bg-brand-cyan/10 border-brand-cyan/20");
 
-            const priceTitle = card.isGraded ? 'Slab Koers' : (isNlBodem ? 'Cardmarket NL Bodem' : 'Richtprijs');
+            const priceTitle = card.isGraded ? 'Slab Koers' : (isBodem ? 'Cardmarket Bodem' : 'Richtprijs');
 
             cardEl.innerHTML = `
                 <div class="flex items-start justify-between gap-3">
@@ -637,10 +673,18 @@
                         <span>Verifieer Certificaat #${card.certNumber}</span>
                     </a>` : ''}
 
-                    <button onclick="shareWhatsAppSingle(${card.id})" class="w-full py-3 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs transition shadow-lg flex items-center justify-center gap-2 active:scale-[0.99]">
-                        <i class="fa-brands fa-whatsapp text-sm"></i>
-                        <span>Bied Aan in WhatsApp Groep</span>
-                    </button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Verbetering 1: Kopieer tekst knop -->
+                        <button onclick="copySingleCardText(${card.id})" id="copy-btn-${card.id}" class="py-3 rounded-full bg-brand-surface border border-brand-border hover:border-brand-mint text-white font-extrabold text-xs transition flex items-center justify-center gap-2 active:scale-[0.99]">
+                            <i class="fa-regular fa-copy text-brand-mint"></i>
+                            <span id="copy-label-${card.id}">Kopieer Tekst</span>
+                        </button>
+
+                        <button onclick="shareWhatsAppSingle(${card.id})" class="py-3 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs transition shadow-lg flex items-center justify-center gap-2 active:scale-[0.99]">
+                            <i class="fa-brands fa-whatsapp text-sm"></i>
+                            <span>WhatsApp</span>
+                        </button>
+                    </div>
                 </div>
             `;
 
@@ -686,52 +730,61 @@
             }
         };
 
-        window.shareWhatsAppSingle = function(cardId) {
+        window.copySingleCardText = function(cardId) {
             const card = currentCards.find(c => c.id === cardId);
             if (!card) return;
 
-            const flag = getFlag(card.languageCode);
-            const numLabel = card.setTotal ? `${card.number}/${card.setTotal}` : `${card.number}`;
-            const setCodeLabel = card.setCode ? `${card.setCode} ` : '';
+            const text = generateCardText(card);
+            navigator.clipboard.writeText(text).then(() => {
+                const label = document.getElementById(`copy-label-${cardId}`);
+                if (label) {
+                    const orig = label.textContent;
+                    label.textContent = "Gekopieerd! ✓";
+                    setTimeout(() => { label.textContent = orig; }, 1800);
+                }
+            });
+        };
 
-            const certLine = (card.isGraded && card.certNumber) ? `\n🏷️ Certificaat: #${card.certNumber}` : '';
-
-            const text = 
-`Hey community! 👋
-
-Hierbij bied ik mijn kaart aan:
-
-🃏 ${card.name} (${setCodeLabel}${numLabel})
-📍 Serie: ${card.setName}
-🌐 Taal: ${flag} ${card.language}
-✨ Conditie: ${card.condition}${certLine}
-💶 Prijs: € ${card.currentPrice.toFixed(2)}
-
-Stuur gerust een berichtje bij interesse! 🤝`;
-
+        window.shareWhatsAppSingle = function(cardId) {
+            const card = currentCards.find(c => c.id === cardId);
+            if (!card) return;
+            const text = generateCardText(card);
             openWhatsApp(text);
         };
+
+        bulkCopyBtn.addEventListener('click', () => {
+            if (currentCards.length === 0) return;
+
+            let cardList = currentCards.map((c) => {
+                const flag = getFlag(c.languageCode);
+                const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${c.number}`;
+                const setCodeLabel = c.setCode ? `${c.setCode} ` : '';
+                const certLine = (c.isGraded && c.certNumber) ? `\n🏷️ Cert: #${c.certNumber}` : '';
+                return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}${certLine}\n💶 Prijs: € ${c.currentPrice.toFixed(2)}`;
+            }).join('\n\n');
+
+            const text = `Hey community! 👋\n\nHierbij bied ik mijn kaarten aan:\n\n${cardList}\n\nStuur gerust een berichtje bij interesse! 🤝`;
+            navigator.clipboard.writeText(text).then(() => {
+                const span = bulkCopyBtn.querySelector('span');
+                if (span) {
+                    span.textContent = "Gekopieerd! ✓";
+                    setTimeout(() => { span.textContent = "Kopieer Alles"; }, 1800);
+                }
+            });
+        });
 
         bulkWhatsappBtn.addEventListener('click', () => {
             if (currentCards.length === 0) return;
 
             let cardList = currentCards.map((c) => {
                 const flag = getFlag(c.languageCode);
-                const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${card.number}`;
+                const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${c.number}`;
                 const setCodeLabel = c.setCode ? `${c.setCode} ` : '';
                 const certLine = (c.isGraded && c.certNumber) ? `\n🏷️ Cert: #${c.certNumber}` : '';
                 return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}${certLine}\n💶 Prijs: € ${c.currentPrice.toFixed(2)}`;
             }).join('\n\n');
 
-            const text = 
-`Hey community! 👋
-
-Hierbij bied ik mijn kaarten aan:
-
-${cardList}
-
-Stuur gerust een berichtje bij interesse! 🤝`;
-
+            const text = `Hey community! 👋\n\nHierbij bied ik mijn kaarten aan:\n\n${cardList}\n\nStuur gerust een berichtje bij interesse! 🤝`;
             openWhatsApp(text);
         });
 
