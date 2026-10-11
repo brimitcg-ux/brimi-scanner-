@@ -150,6 +150,12 @@
                     </p>
                 </div>
             </div>
+
+            <!-- Snelle Live Status Indicator -->
+            <div id="live-indicator" onclick="checkServerHealth()" class="cursor-pointer text-[11px] font-bold text-brand-textMuted bg-brand-surface/80 border border-brand-border px-3 py-1.5 rounded-full flex items-center gap-2 hover:border-brand-mint/50 transition">
+                <span id="indicator-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                <span id="indicator-text">Verbinden...</span>
+            </div>
         </header>
 
         <!-- Hero Kop -->
@@ -221,22 +227,28 @@
             </p>
         </div>
 
-        <!-- Fout / Opnieuw proberen box -->
+        <!-- Transparante Fout & Diagnose Box -->
         <div id="retry-box" class="hidden agency-card rounded-2xl p-5 border-red-500/40 space-y-3">
             <div class="flex items-start gap-3">
                 <i class="fa-solid fa-triangle-exclamation text-red-400 text-lg mt-0.5"></i>
-                <div class="space-y-1">
-                    <p class="text-sm font-bold text-white" id="retry-title">Scan Mislukt</p>
-                    <p class="text-xs text-brand-textMuted font-medium leading-relaxed" id="retry-desc">
-                        Er kon geen verbinding tot stand worden gebracht. Probeer het opnieuw.
+                <div class="space-y-1 w-full">
+                    <p class="text-sm font-bold text-white" id="retry-title">Fout bij verwerken</p>
+                    <p class="text-xs text-red-300 font-mono bg-red-950/40 border border-red-900/50 p-2 rounded-xl break-all" id="retry-desc">
+                        Geen respons ontvangen.
                     </p>
                 </div>
             </div>
 
-            <button id="retry-btn" class="w-full py-2.5 rounded-full bg-brand-surface border border-brand-border hover:border-brand-mint text-xs font-extrabold text-white transition flex items-center justify-center gap-2">
-                <i class="fa-solid fa-rotate-right text-brand-mint"></i>
-                <span>Opnieuw Proberen</span>
-            </button>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+                <button id="retry-btn" class="w-full py-2.5 rounded-full bg-brand-surface border border-brand-border hover:border-brand-mint text-xs font-extrabold text-white transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-rotate-right text-brand-mint"></i>
+                    <span>Opnieuw Proberen</span>
+                </button>
+                <button onclick="testDirectServerUrl()" class="w-full py-2.5 rounded-full bg-brand-surface border border-brand-border hover:border-brand-cyan text-xs font-extrabold text-brand-cyan transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-link"></i>
+                    <span>Open Server Link</span>
+                </button>
+            </div>
         </div>
 
         <!-- Resultaten Sectie -->
@@ -277,7 +289,7 @@
                     <div class="space-y-1">
                         <h4 class="text-sm font-extrabold text-white">Geen Urenlang Speurwerk</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Binnen één seconde de actuele Nederlandse marktwaarde zonder eindeloos handmatig zoeken op Cardmarket.
+                            Binnen één seconde de actuele marktwaarde zonder eindeloos handmatig zoeken op Cardmarket.
                         </p>
                     </div>
                 </div>
@@ -318,9 +330,6 @@
     <script>
         const API_BASE = "https://brimi-cardmarket-api.onrender.com";
 
-        // Stille voorverwarming van Render zodra de pagina in Safari laadt
-        fetch(`${API_BASE}/`).catch(() => {});
-
         const fileInput = document.getElementById('file-input');
         const dropZone = document.getElementById('drop-zone');
         const dropContent = document.getElementById('drop-content');
@@ -340,9 +349,41 @@
         const cardCounter = document.getElementById('card-counter');
         const bulkWhatsappBtn = document.getElementById('bulk-whatsapp-btn');
         const resetBtn = document.getElementById('reset-btn');
+        const indicatorDot = document.getElementById('indicator-dot');
+        const indicatorText = document.getElementById('indicator-text');
 
         let currentCards = [];
         let lastProcessedBase64 = null;
+
+        // Snelle health check functie
+        async function checkServerHealth() {
+            indicatorDot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+            indicatorText.textContent = "Controleren...";
+            try {
+                const res = await fetch(`${API_BASE}/`, { method: 'GET', cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    indicatorDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+                    indicatorText.textContent = "Server Online";
+                    return true;
+                } else {
+                    indicatorDot.className = "w-2 h-2 rounded-full bg-red-400";
+                    indicatorText.textContent = `Server Fout (${res.status})`;
+                    return false;
+                }
+            } catch (e) {
+                indicatorDot.className = "w-2 h-2 rounded-full bg-red-400";
+                indicatorText.textContent = "Offline / Opstarten";
+                return false;
+            }
+        }
+
+        // Direct testen bij inladen
+        checkServerHealth();
+
+        window.testDirectServerUrl = function() {
+            window.open(`${API_BASE}/`, '_blank');
+        };
 
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files && e.target.files[0];
@@ -359,7 +400,6 @@
             statusSubtitle.textContent = "Afbeelding gereedmaken voor analyse...";
             progressBar.style.width = "25%";
 
-            // Snelle geheugenvriendelijke blob flow voor iOS
             const objectUrl = URL.createObjectURL(file);
             const img = new Image();
 
@@ -369,7 +409,7 @@
                 const canvas = document.createElement('canvas');
                 let w = img.naturalWidth || img.width;
                 let h = img.naturalHeight || img.height;
-                const maxDim = 800; // Ideaal formaat voor AI OCR & razendsnel uploaden (~75KB)
+                const maxDim = 800;
 
                 if (w > maxDim || h > maxDim) {
                     if (w > h) {
@@ -395,11 +435,7 @@
 
             img.onerror = () => {
                 URL.revokeObjectURL(objectUrl);
-                retryTitle.textContent = "Afbeelding niet geladen";
-                retryDesc.textContent = "De foto kon niet worden gelezen. Probeer het opnieuw.";
-                retryBox.classList.remove('hidden');
-                scanningState.classList.add('hidden');
-                laserBeam.classList.add('hidden');
+                showError("Afbeelding niet geladen", "De geselecteerde foto kon niet door Safari gelezen worden.");
             };
 
             img.src = objectUrl;
@@ -408,12 +444,12 @@
 
         async function executeScan(base64Data) {
             statusTitle.textContent = "Kaart identificeren...";
-            statusSubtitle.textContent = "Leest serie, nummer en conditie...";
+            statusSubtitle.textContent = "Verbinding maken met scanner engine...";
             progressBar.style.width = "50%";
 
             const progressTimer = setTimeout(() => {
                 statusTitle.textContent = "Koersen raadplegen...";
-                statusSubtitle.textContent = "Marktprijzen en veilingstatistieken ophalen...";
+                statusSubtitle.textContent = "Veilingstatistieken ophalen...";
                 progressBar.style.width = "80%";
             }, 1200);
 
@@ -433,10 +469,10 @@
                 clearTimeout(progressTimer);
 
                 if (!response.ok) {
-                    let errMsg = `Verbindingsfout (${response.status})`;
+                    let errMsg = `HTTP Foutcode ${response.status} (${response.statusText})`;
                     try {
                         const parsed = await response.json();
-                        if (parsed.detail) errMsg = parsed.detail;
+                        if (parsed.detail) errMsg = `Server Detail: ${parsed.detail}`;
                     } catch(e) {}
                     throw new Error(errMsg);
                 }
@@ -452,13 +488,17 @@
 
             } catch (error) {
                 clearTimeout(progressTimer);
-                scanningState.classList.add('hidden');
-                laserBeam.classList.add('hidden');
-
-                retryTitle.textContent = "Scan Mislukt";
-                retryDesc.textContent = "Er kon geen verbinding tot stand worden gebracht. Tik op opnieuw proberen om de scan te voltooien.";
-                retryBox.classList.remove('hidden');
+                showError("Scan Niet Voltooid", error.message || error.toString());
             }
+        }
+
+        function showError(title, message) {
+            scanningState.classList.add('hidden');
+            laserBeam.classList.add('hidden');
+            retryTitle.textContent = title;
+            retryDesc.textContent = message;
+            retryBox.classList.remove('hidden');
+            checkServerHealth();
         }
 
         retryBtn.addEventListener('click', () => {
