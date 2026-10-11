@@ -2,7 +2,7 @@ import os
 import json
 import re
 import urllib.parse
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 import httpx
 from fastapi import FastAPI, Request
@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Scanner Engine", version="8.5.0")
+app = FastAPI(title="BRIMI Scanner Engine", version="8.7.0")
 
 # Volledige CORS-ondersteuning voor iOS Safari en web-apps
 app.add_middleware(
@@ -48,12 +48,90 @@ def get_pricecharting_url(card_name: str, card_number: str) -> str:
     query = f"pokemon {card_name} {clean_num}".strip()
     return f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(query)}&type=prices"
 
+def robust_parse_cards(raw_text: str) -> List[Dict[str, Any]]:
+    """
+    Onbreekbare JSON/Object parser:
+    1. Probeert standaard json.loads
+    2. Probeert JSON auto-repair (afgeknipte arrays/strings afronden)
+    3. Fallback: Regex extractie per object blok
+    """
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    if cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    cleaned = cleaned.strip()
+
+    # 1. Directe poging
+    try:
+        data = json.loads(cleaned)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+    except Exception:
+        pass
+
+    # 2. Reparatie poging voor afgeknipte array
+    try:
+        # Zoek eerste '[' en laatste '}'
+        start_idx = cleaned.find("[")
+        if start_idx != -1:
+            sub = cleaned[start_idx:]
+            last_brace = sub.rfind("}")
+            if last_brace != -1:
+                repaired = sub[:last_brace + 1].strip() + "]"
+                data = json.loads(repaired)
+                if isinstance(data, list):
+                    return data
+    except Exception:
+        pass
+
+    # 3. Fallback: Regex extractie van elk { ... } blok
+    card_objects = []
+    blocks = re.findall(r"\{[^{}]*\}", cleaned, re.DOTALL)
+    for b in blocks:
+        obj = {}
+        # Zoek basis properties
+        name_m = re.search(r'"cardName"\s*:\s*"([^"]+)"', b)
+        num_m = re.search(r'"cardNumber"\s*:\s*"([^"]+)"', b)
+        tot_m = re.search(r'"setTotal"\s*:\s*"([^"]+)"', b)
+        code_m = re.search(r'"setCode"\s*:\s*"([^"]+)"', b)
+        set_m = re.search(r'"setName"\s*:\s*"([^"]+)"', b)
+        lang_m = re.search(r'"language"\s*:\s*"([^"]+)"', b)
+        price_m = re.search(r'"marketEstimateEUR"\s*:\s*([0-9\.]+)', b)
+        graded_m = re.search(r'"isGraded"\s*:\s*(true|false)', b, re.IGNORECASE)
+        grade_m = re.search(r'"grade"\s*:\s*([0-9\.]+)', b)
+        comp_m = re.search(r'"gradingCompany"\s*:\s*"([^"]+)"', b)
+
+        if name_m:
+            obj["cardName"] = name_m.group(1)
+            obj["cardNumber"] = num_m.group(1) if num_m else ""
+            obj["setTotal"] = tot_m.group(1) if tot_m else ""
+            obj["setCode"] = code_m.group(1) if code_m else ""
+            obj["setName"] = set_m.group(1) if set_m else "Pokémon Set"
+            obj["language"] = lang_m.group(1) if lang_m else "Engels"
+            obj["languageCode"] = "EN"
+            obj["isGraded"] = True if (graded_m and graded_m.group(1).lower() == "true") else False
+            obj["gradingCompany"] = comp_m.group(1) if comp_m else None
+            obj["grade"] = grade_m.group(1) if grade_m else None
+            obj["condition"] = f"{obj['gradingCompany']} {obj['grade']}" if obj["isGraded"] else "Near Mint (NM)"
+            obj["marketEstimateEUR"] = float(price_m.group(1)) if price_m else 4.50
+            card_objects.append(obj)
+
+    if card_objects:
+        return card_objects
+
+    return []
+
 @app.get("/")
 def health_check():
     key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
     return {
         "status": "online",
-        "engine": "BRIMI Precision Engine",
+        "engine": "BRIMI Precision Engine 8.7",
         "gemini_api_key_configured": key_configured
     }
 
@@ -66,46 +144,46 @@ async def scan_cards(payload: ScanRequest):
             content={"detail": "GEMINI_API_KEY ontbreekt in Render Environment Variables."}
         )
 
-    # Sanitizeer de base64 payload
     clean_b64 = payload.image_base64
     if "," in clean_b64:
         clean_b64 = clean_b64.split(",", 1)[1]
     clean_b64 = clean_b64.replace("\n", "").replace("\r", "").strip()
 
     prompt = """
-Analyseer de Pokémon kaart op deze afbeelding zorgvuldig:
-1. Naam: Officiële Pokémon kaartnaam (bijv. Naganadel GX, Palafin, Charizard ex).
-2. Nummer: Cijfers vóór de schuine streep (bijv. '230' of '062').
-3. Totaal: Cijfers na de schuine streep (bijv. '236' of '091').
-4. Setcode: Letters/code linksonder (bijv. SM11, PAF, SV06).
-5. Setnaam: Officiële set (bijv. Unified Minds, Paldean Fates).
-6. Taal: Engels ('EN'), Japans ('JP') of Chinees ('CN').
-7. Graded Slab herkenning:
-   - isGraded: true als de kaart in een gecertificeerde slab zit (PSA, CGC, BGS), anders false.
-   - gradingCompany: "PSA", "BGS", "CGC" of null.
-   - grade: Cijfer op het label (bijv. "10", "9.5", "9") of null.
-   - condition: Bij slab bijv. "PSA 9 Mint". Bij ongegradeerd: "Near Mint (NM)".
-8. Reële Marktwaarde in euro:
-   - Voor ongegradeerde kaarten: Cardmarket NL richtprijs (Near Mint).
-   - Voor graded slabs: PriceCharting actuele veilingkoers voor DEZE SPECIFIEKE GRADE.
-     Voorbeeld: Een PSA 9 van Naganadel GX #230 ligt historisch rond $15.85 (€ 14.60), NIET € 35. Een PSA 10 ligt rond $125 (€ 115). Geef een accuraat getal passend bij de specifieke grade!
+Analyseer alle Pokémon kaarten op de afbeelding. Dit kan 1 enkele kaart zijn of meerdere tegelijk op tafel.
+Scan elke kaart systematisch van links naar rechts en boven naar onder.
 
-Output UITSLUITEND een geldige JSON array:
+Geef per kaart:
+- cardName: Officiële kaartnaam (bijv. Goldeen, Charizard ex, Vaporeon).
+- cardNumber: Nummer vóór de schuine streep (bijv. "064").
+- setTotal: Totaal ná de schuine streep (bijv. "064").
+- setCode: Setcode linksonder (bijv. MEW, OBF, TEU).
+- setName: Setnaam (bijv. 151, Obsidian Flames).
+- language: "Engels", "Japans" of "Chinees".
+- languageCode: "EN", "JP" of "CN".
+- rarity: Zeldzaamheid (bijv. Illustration Rare, Secret Rare, Ultra Rare).
+- isGraded: true als in PSA/CGC/BGS slab, anders false.
+- gradingCompany: "PSA", "BGS", "CGC" of null.
+- grade: Cijfer op slab label of null.
+- condition: Bij slab bijv. "PSA 9 Mint", anders "Near Mint (NM)".
+- marketEstimateEUR: Reële Cardmarket NL prijs (ongegradeerd) of PriceCharting veilingkoers (slab).
+
+Retourneer ALLEEN een geldige JSON array:
 [
   {
-    "cardName": "Naganadel GX",
-    "cardNumber": "230",
-    "setTotal": "236",
-    "setCode": "SM11",
-    "setName": "Unified Minds",
+    "cardName": "Goldeen",
+    "cardNumber": "064",
+    "setTotal": "064",
+    "setCode": "MEW",
+    "setName": "151",
     "language": "Engels",
     "languageCode": "EN",
-    "rarity": "Secret Rare",
-    "isGraded": true,
-    "gradingCompany": "PSA",
-    "grade": "9",
-    "condition": "PSA 9 Mint",
-    "marketEstimateEUR": 14.60
+    "rarity": "Illustration Rare",
+    "isGraded": false,
+    "gradingCompany": null,
+    "grade": null,
+    "condition": "Near Mint (NM)",
+    "marketEstimateEUR": 3.50
   }
 ]
 """
@@ -126,15 +204,15 @@ Output UITSLUITEND een geldige JSON array:
         "generationConfig": {
             "responseMimeType": "application/json",
             "temperature": 0.1,
-            "maxOutputTokens": 1024
+            "maxOutputTokens": 4096
         }
     }
 
     raw_text = ""
     last_error = ""
 
-    async with httpx.AsyncClient(timeout=35.0) as client:
-        # Stap 1: Dynamisch actieve modellen ophalen die specifiek voor deze sleutel werken
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        # Dynamisch actieve modellen detecteren
         candidate_models = []
         try:
             m_res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
@@ -149,12 +227,11 @@ Output UITSLUITEND een geldige JSON array:
         except Exception:
             pass
 
-        # Stap 2: Voeg actuele standaard flash-modellen toe als fallback
-        for fallback in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-001", "gemini-flash-latest"]:
+        # Vaste fallback volgorde
+        for fallback in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]:
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
 
-        # Stap 3: Analyse uitvoeren met het eerste beschikbare model
         for model_name in candidate_models:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             try:
@@ -177,23 +254,11 @@ Output UITSLUITEND een geldige JSON array:
             content={"detail": f"Analyse mislukt door AI provider ({last_error})."}
         )
 
-    cleaned = raw_text.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    if cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    cleaned = cleaned.strip()
-
-    try:
-        cards_data = json.loads(cleaned)
-        if not isinstance(cards_data, list):
-            cards_data = [cards_data]
-    except Exception as e:
+    cards_data = robust_parse_cards(raw_text)
+    if not cards_data:
         return JSONResponse(
             status_code=500,
-            content={"detail": f"Fout bij verwerken data: {str(e)}"}
+            content={"detail": "Geen kaartgegevens kunnen structureren uit het AI antwoord."}
         )
 
     results = []
@@ -201,7 +266,7 @@ Output UITSLUITEND een geldige JSON array:
         is_graded = bool(c.get("isGraded") or c.get("gradingCompany"))
         card_name = c.get("cardName", "Pokémon Kaart")
         card_num = str(c.get("cardNumber", ""))
-        price_val = float(c.get("marketEstimateEUR") or 4.0)
+        price_val = float(c.get("marketEstimateEUR") or 3.50)
 
         if is_graded:
             target_url = get_pricecharting_url(card_name, card_num)
