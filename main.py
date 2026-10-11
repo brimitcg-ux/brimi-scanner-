@@ -5,21 +5,28 @@ import urllib.parse
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Scanner Engine", version="8.2.0")
+app = FastAPI(title="BRIMI Scanner Engine", version="8.3.0")
 
-# Enkelvoudige, officiële CORS middleware (geen conflicterende dubbele headers)
+# Volledige, officiële CORS-ondersteuning voor alle browsers en mobiele toestellen
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Interne serverfout: {str(exc)}"}
+    )
 
 class ScanRequest(BaseModel):
     image_base64: str
@@ -43,7 +50,12 @@ def get_pricecharting_url(card_name: str, card_number: str) -> str:
 
 @app.get("/")
 def health_check():
-    return {"status": "online", "engine": "BRIMI Precision Engine"}
+    key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
+    return {
+        "status": "online",
+        "engine": "BRIMI Precision Engine",
+        "gemini_api_key_configured": key_configured
+    }
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
@@ -51,7 +63,7 @@ async def scan_cards(payload: ScanRequest):
     if not key:
         return JSONResponse(
             status_code=500,
-            content={"detail": "GEMINI_API_KEY ontbreekt in Render Environment Variables."}
+            content={"detail": "GEMINI_API_KEY ontbreekt in Render Environment Variables. Voeg deze toe in het Render dashboard."}
         )
 
     # Sanitizeer base64 invoer
@@ -76,7 +88,7 @@ Analyseer de Pokémon kaart op deze afbeelding zorgvuldig:
 8. Reële Marktwaarde in euro:
    - Voor ongegradeerde kaarten: Cardmarket NL richtprijs (Near Mint).
    - Voor graded slabs: PriceCharting actuele veilingkoers voor DEZE SPECIFIEKE GRADE.
-     BELANGRIJK: Een PSA 9 van een moderne ultra/secret rare zoals Naganadel GX #230 ligt historisch rond $15.50 - $16.50 (€ 14.50 - € 15.50), NIET € 35. Een PSA 10 ligt rond $125 (€ 115). Geef een accuraat getal passend bij de specifieke grade!
+     Voorbeeld: Een PSA 9 van Naganadel GX #230 ligt historisch rond $15.85 (€ 14.60), NIET € 35. Een PSA 10 ligt rond $125 (€ 115). Geef een accuraat getal passend bij de specifieke grade!
 
 Output UITSLUITEND een geldige JSON array:
 [
@@ -93,7 +105,7 @@ Output UITSLUITEND een geldige JSON array:
     "gradingCompany": "PSA",
     "grade": "9",
     "condition": "PSA 9 Mint",
-    "marketEstimateEUR": 14.80
+    "marketEstimateEUR": 14.60
   }
 ]
 """
@@ -118,12 +130,12 @@ Output UITSLUITEND een geldige JSON array:
         }
     }
 
-    # Officiële werkende modellen
+    # Officiële actieve modellen
     models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
     raw_text = ""
     last_error = ""
 
-    async with httpx.AsyncClient(timeout=25.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         for model_name in models_to_try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             try:
@@ -136,14 +148,14 @@ Output UITSLUITEND een geldige JSON array:
                         if raw_text:
                             break
                 else:
-                    last_error = f"{model_name} HTTP {res.status_code}"
+                    last_error = f"{model_name} HTTP {res.status_code}: {res.text[:120]}"
             except Exception as e:
                 last_error = str(e)
 
     if not raw_text:
         return JSONResponse(
             status_code=502,
-            content={"detail": f"Analyse mislukt ({last_error})."}
+            content={"detail": f"Analyse mislukt door AI provider ({last_error})."}
         )
 
     cleaned = raw_text.strip()
