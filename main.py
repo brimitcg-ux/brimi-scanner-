@@ -64,20 +64,26 @@ CANDIDATE_MODELS = [
 ]
 
 SYSTEM_PROMPT = """
-Je bent de geavanceerde visuele inspectie-engine van BRIMI Scanner voor Pokémon TCG.
-Analyseer de afbeelding nauwkeurig. De foto kan één losse kaart, een stapel kaarten of een graded slab (PSA, CGC, BGS, PCA) bevatten.
+Je bent de geavanceerde, uiterst nauwkeurige visuele inspectie-engine van BRIMI Scanner voor Pokémon TCG.
+Analyseer de afbeelding uiterst scherp. De foto kan één losse kaart, een stapel kaarten of een graded slab (PSA, CGC, BGS, PCA) bevatten.
 
-Geef ALTIJD en UITSLUITEND een geldige JSON-array terug met voor elke herkende kaart een object:
+STRIKTE REGELS VOOR HERKENNING:
+1. KAARTNAAM: Lees letter voor letter de exacte naam linksboven op de kaart (bijv. "Goldeen", "Dewgong", "Clauncher", "Alolan Exeggutor", "Palafin"). Kijk ook naar de HP (bijv. 70 HP of 130 HP) en Stage om de identiteit te verifiëren. Verzin NOOIT een andere Pokémon!
+2. KAARTNUMMER & TOTAAL: Kijk linksonder (of rechtsonder bij oudere sets) naar het exacte nummer en totaal rond de schuine streep, bijv. "087/084" of "097/094" of "205/198" of "230/236". Neem zowel het lokale nummer als het set-totaal exact over.
+3. SETCODE: Kijk linksonder naar de afkorting in het witte/zwarte blokje (bijv. PFL, SVI, PAL, OBF, MEW, PR-SW). Als het niet met 100% zekerheid leesbaar is, zet dan null in plaats van te gokken.
+4. SLABS: Als de kaart in een plastic PSA/CGC/BGS slab zit, lees dan de grader, de officiële grade (bijv. 9 of 10) en het certificaatnummer van het bovenste label.
+
+Geef ALTIJD en UITSLUITEND een geldige JSON-array terug:
 [
   {
-    "cardName": "Officiële Engelse naam van de Pokémon / Trainer (bijv. Alolan Exeggutor of Naganadel GX)",
-    "cardNumber": "Nummer van de kaart, bijv. 230 of 097 of 205",
-    "setTotal": "Totaal aantal kaarten in set indien leesbaar, bijv. 236 of 198 of null",
-    "setCode": "Setcode linksonder indien zichtbaar, bijv. SVI, CEL, UNM, PAL, PR-SW",
-    "setName": "Officiële setnaam, bijv. Unified Minds, Celebrations, Scarlet & Violet",
-    "language": "Engels, Japans, Chinees, Duits, Frans, etc.",
+    "cardName": "Exacte Engelse naam van de Pokémon / Trainer",
+    "cardNumber": "Nummer van de kaart, bijv. 087 of 205",
+    "setTotal": "Totaal aantal kaarten in set indien zichtbaar, bijv. 084 of 198 of null",
+    "setCode": "Setcode linksonder indien leesbaar, anders null",
+    "setName": "Officiële setnaam (bijv. Phantasmal Flames, Scarlet & Violet, Unified Minds)",
+    "language": "Engels, Japans, Chinees, etc.",
     "languageCode": "EN, JP, CN, DE, FR",
-    "rarity": "Common, Uncommon, Rare, Ultra Rare, Secret Rare, Illustration Rare",
+    "rarity": "Illustration Rare, Special Illustration Rare, Ultra Rare, Common, etc.",
     "isGraded": false,
     "gradingCompany": null,
     "grade": null,
@@ -182,7 +188,6 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
         # Anders: zoek de eerste productlink in de zoekresultaten
         product_links = re.findall(r'href=["\'](/game/pokemon-[^"\']+)["\']', html_content)
         if product_links:
-            # Neem de best passende link
             target_slug = product_links[0]
             for pl in product_links:
                 if clean_num in pl:
@@ -242,7 +247,6 @@ async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card
         clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', card_name).strip()
         search_terms = [clean_name]
         
-        # Voeg ook hoofdnaam toe als fallback (bijv. "Exeggutor" ipv "Alolan Exeggutor")
         words = clean_name.split()
         if len(words) > 1 and words[-1].lower() not in ["gx", "v", "ex", "vmax", "vstar"]:
             search_terms.append(words[-1])
@@ -415,7 +419,6 @@ async def scan_cards(request: ScanRequest):
     results: List[CardResult] = []
 
     async with httpx.AsyncClient() as client:
-        # Taken klaarzetten voor gelijktijdige afhandeling van TCGdex en PriceCharting
         tcgdex_tasks = []
         pc_tasks = []
 
@@ -458,7 +461,6 @@ async def scan_cards(request: ScanRequest):
                 price_source = f"PriceCharting ({company} {grade_val})"
                 market_url = pc_data.get("product_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), True, company, grade_val)
             else:
-                # Eerlijke fallback: GEEN verzonnen multiplier meer!
                 final_price = 0.0
                 price_source = f"PriceCharting (Handmatig Invoeren)"
                 market_url = generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), True, company, grade_val)
@@ -483,7 +485,6 @@ async def scan_cards(request: ScanRequest):
                     resolved_set_name = tcgdex_data["official_set"]
                 market_url = tcgdex_data.get("cm_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
             else:
-                # Eerlijke fallback: GEEN willekeurige AI getallen meer!
                 final_price = 0.0
                 price_source = "Cardmarket NL (Handmatig Invoeren)"
                 market_url = generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
