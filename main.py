@@ -13,7 +13,7 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brimi-backend")
 
-app = FastAPI(title="BRIMI Precision Scanner API", version="2.5.0")
+app = FastAPI(title="BRIMI Precision Scanner API", version="2.5.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,9 +57,9 @@ def get_api_keys() -> List[str]:
 
 CANDIDATE_MODELS = [
     "gemini-3.8-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-flash-latest"
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash"
 ]
 
 SYSTEM_PROMPT = """
@@ -77,14 +77,13 @@ Geef ALTIJD en UITSLUITEND een geldige JSON-array terug met voor elke herkende k
     "language": "Engels, Japans, Chinees, Duits, Frans, etc.",
     "languageCode": "EN, JP, CN, DE, FR",
     "rarity": "Common, Uncommon, Rare, Double Rare, Illustration Rare, Special Illustration Rare, Ultra Rare, Hyper Rare",
-    "isGraded": true/false,
-    "gradingCompany": "PSA, CGC, BGS, PCA of null",
-    "grade": "bijv. 10, 9.5, 9 of null",
-    "certNumber": "Certificaatnummer indien slab, anders null",
+    "isGraded": false,
+    "gradingCompany": null,
+    "grade": null,
+    "certNumber": null,
     "estimatedPriceEUR": 5.0
   }
 ]
-Geef geen markdown opmaak (zoals ```json), puur de ruwe JSON string.
 """
 
 async def fetch_tcgdex_data(client: httpx.AsyncClient, card_name: str, card_number: str, set_code: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -94,7 +93,6 @@ async def fetch_tcgdex_data(client: httpx.AsyncClient, card_name: str, card_numb
     
     headers = {"Accept": "application/json"}
     
-    # Poging 1: Direct zoeken via set code en lokaal ID
     if set_code:
         clean_set = set_code.strip().lower()
         candidate_ids = [
@@ -120,7 +118,6 @@ async def fetch_tcgdex_data(client: httpx.AsyncClient, card_name: str, card_numb
             except Exception:
                 pass
 
-    # Poging 2: Zoeken op naam
     try:
         clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', card_name).strip()
         search_url = f"https://api.tcgdex.net/v2/en/cards?name={httpx.URL(clean_name)}"
@@ -152,10 +149,8 @@ async def fetch_tcgdex_data(client: httpx.AsyncClient, card_name: str, card_numb
 def generate_market_url(card_name: str, card_number: str, is_graded: bool, grading_company: Optional[str], grade: Optional[str]) -> str:
     clean_name = card_name.replace(" ", "+")
     if is_graded:
-        # PriceCharting slab deeplink
         return f"https://www.pricecharting.com/search-products?q={clean_name}+{card_number}&type=prices"
     else:
-        # Directe Cardmarket NL filter deeplink: sellerCountry=17 (Nederland), minCondition=2 (Near Mint)
         return f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={clean_name}+{card_number}&sellerCountry=17&minCondition=2"
 
 async def call_gemini_vision(image_base64: str, mime_type: str) -> str:
@@ -181,7 +176,8 @@ async def call_gemini_vision(image_base64: str, mime_type: str) -> str:
         ],
         "generationConfig": {
             "temperature": 0.1,
-            "maxOutputTokens": 2048
+            "maxOutputTokens": 2048,
+            "responseMimeType": "application/json"
         },
         "safetySettings": [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -215,7 +211,6 @@ async def call_gemini_vision(image_base64: str, mime_type: str) -> str:
                             if parts and "text" in parts[0]:
                                 return parts[0]["text"]
                         
-                        # Controleer of Google het stil heeft geweigerd
                         feedback = data.get("promptFeedback", {})
                         block_reason = feedback.get("blockReason")
                         if block_reason:
@@ -225,7 +220,7 @@ async def call_gemini_vision(image_base64: str, mime_type: str) -> str:
                     elif response.status_code == 429:
                         last_error_msg = f"Sleutel {key_idx + 1} limiet bereikt (HTTP 429)"
                         logger.warning(last_error_msg)
-                        break  # Schakel direct door naar de volgende sleutel!
+                        break
                     elif response.status_code in [404, 503]:
                         last_error_msg = f"{model_name} ({response.status_code})"
                         continue
@@ -241,25 +236,41 @@ def parse_ai_json(raw_text: str) -> List[Dict[str, Any]]:
     cleaned = re.sub(r"^```(?:json)?", "", cleaned, flags=re.MULTILINE)
     cleaned = re.sub(r"```$", "", cleaned, flags=re.MULTILINE).strip()
     
-    # Zoek array haken
-    start = cleaned.find("[")
-    end = cleaned.rfind("]")
-    if start != -1 and end != -1:
-        cleaned = cleaned[start:end+1]
-    
     try:
         parsed = json.loads(cleaned)
         if isinstance(parsed, list):
             return parsed
         elif isinstance(parsed, dict):
             return [parsed]
-    except Exception as e:
-        logger.error(f"JSON Parse fout: {e} | Ruwe tekst: {raw_text}")
+    except Exception:
+        pass
+
+    start = cleaned.find("[")
+    end = cleaned.rfind("]")
+    if start != -1 and end != -1:
+        try:
+            parsed = json.loads(cleaned[start:end+1])
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            pass
+
+    start_obj = cleaned.find("{")
+    end_obj = cleaned.rfind("}")
+    if start_obj != -1 and end_obj != -1:
+        try:
+            parsed = json.loads(cleaned[start_obj:end_obj+1])
+            if isinstance(parsed, dict):
+                return [parsed]
+        except Exception:
+            pass
+
+    logger.error(f"JSON Parse fout. Ruwe tekst: {raw_text}")
     return []
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "2.5.0"}
+    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "2.5.1"}
 
 @app.post("/api/scan", response_model=List[CardResult])
 async def scan_cards(request: ScanRequest):
@@ -293,15 +304,11 @@ async def scan_cards(request: ScanRequest):
         avg30_eur = None
 
         if is_graded:
-            # Graded slab taxatie op basis van Grade
             grade_val = str(c.get("grade", "9")).strip()
             multiplier = 4.5 if "10" in grade_val else (2.0 if "9" in grade_val else 1.3)
             final_price = round(ai_price * multiplier, 2)
             price_source = f"PriceCharting Slab ({c.get('gradingCompany', 'Slab')} {grade_val})"
         else:
-            # PRIORITEIT 1: Echte Cardmarket Marktkoers (Trend of 30d Gemiddelde)
-            # We gebruiken bewust NIET de Europese 'low', omdat die vaak afkomstig is van buitenlandse dumpaanbiedingen.
-            # Cardmarket Trend weerspiegelt de werkelijke marktwaarde in Nederland accuraat.
             if tcgdex_data and (tcgdex_data.get("trend") or tcgdex_data.get("avg30")):
                 trend_val = tcgdex_data.get("trend")
                 avg_val = tcgdex_data.get("avg30")
@@ -311,21 +318,18 @@ async def scan_cards(request: ScanRequest):
                 price_source = "Cardmarket NL Koers"
                 if tcgdex_data.get("official_set"):
                     resolved_set_name = tcgdex_data["official_set"]
-            # PRIORITEIT 2: Cardmarket Europese bodem indien geen trend bekend
             elif tcgdex_data and tcgdex_data.get("low"):
                 final_price = float(tcgdex_data["low"])
                 low_price_eur = float(tcgdex_data["low"])
                 price_source = "Cardmarket Bodem"
                 if tcgdex_data.get("official_set"):
                     resolved_set_name = tcgdex_data["official_set"]
-            # PRIORITEIT 3: Gekalibreerde AI Richtprijs
             else:
                 final_price = ai_price
                 price_source = "Cardmarket NL Richtprijs"
 
         final_price = round(final_price, 2)
 
-        # Certificaat url genereren bij PSA of CGC
         cert_num = c.get("certNumber")
         cert_url = None
         if cert_num and is_graded:
