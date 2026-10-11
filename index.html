@@ -7,7 +7,7 @@
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" client-hints="true">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- FontAwesome 6 -->
@@ -124,7 +124,6 @@
         <!-- Top Navigatie Bar -->
         <header class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <!-- Pokéball Logo in Agency stijl -->
                 <div class="w-11 h-11 rounded-2xl bg-brand-surface border border-brand-border flex items-center justify-center shadow-lg relative overflow-hidden group">
                     <svg viewBox="0 0 40 40" class="w-7 h-7" fill="none">
                         <path d="M4 20C4 11.1634 11.1634 4 20 4C28.8366 4 36 11.1634 36 20H25.5C25.5 17.5 23.5 15.5 20 15.5C16.5 15.5 14.5 17.5 14.5 20H4Z" fill="url(#cyanGrad)"/>
@@ -185,7 +184,7 @@
                             Maak een foto of kies uit bibliotheek
                         </p>
                         <p class="text-xs text-brand-textMuted font-medium">
-                            Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
+                            Herkent singles, meerdere kaarten en graded slabs (PSA / CGC / BGS)
                         </p>
                     </div>
 
@@ -316,7 +315,6 @@
     </div>
 
     <script>
-        // Exacte URL van jouw actieve Render service
         const API_BASE = "https://brimi-scanner.onrender.com";
 
         const fileInput = document.getElementById('file-input');
@@ -342,7 +340,7 @@
         let currentCards = [];
         let lastProcessedBase64 = null;
 
-        // Achtergrond-ping om Render alvast wakker te maken bij openen
+        // Achtergrond ping bij opstarten
         fetch(`${API_BASE}/`, { method: 'GET', cache: 'no-store' }).catch(() => {});
 
         fileInput.addEventListener('change', (e) => {
@@ -369,7 +367,7 @@
                 const canvas = document.createElement('canvas');
                 let w = img.naturalWidth || img.width;
                 let h = img.naturalHeight || img.height;
-                const maxDim = 800;
+                const maxDim = 1000;
 
                 if (w > maxDim || h > maxDim) {
                     if (w > h) {
@@ -386,7 +384,7 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
 
-                const compressed = canvas.toDataURL('image/jpeg', 0.80);
+                const compressed = canvas.toDataURL('image/jpeg', 0.82);
                 imageDisplay.src = compressed;
                 lastProcessedBase64 = compressed.split(',')[1];
 
@@ -403,13 +401,13 @@
         });
 
         async function executeScan(base64Data) {
-            statusTitle.textContent = "Kaart analyseren...";
-            statusSubtitle.textContent = "Gegevens en serie herkennen...";
-            progressBar.style.width = "50%";
+            statusTitle.textContent = "Kaart herkennen...";
+            statusSubtitle.textContent = "Kaarten en nummers identificeren...";
+            progressBar.style.width = "45%";
 
             const progressTimer = setTimeout(() => {
-                statusTitle.textContent = "Koersen ophalen...";
-                statusSubtitle.textContent = "Marktprijzen berekenen...";
+                statusTitle.textContent = "Beursdata raadplegen...";
+                statusSubtitle.textContent = "Cardmarket Trend & PriceCharting ophalen...";
                 progressBar.style.width = "80%";
             }, 1200);
 
@@ -492,6 +490,8 @@
                 grade: c.grade || null,
                 basePriceNM: parseFloat(c.basePriceNM || c.estimatedPriceEUR || 3.0),
                 currentPrice: parseFloat(c.estimatedPriceEUR || 3.0),
+                lowPriceEUR: c.lowPriceEUR ? parseFloat(c.lowPriceEUR) : null,
+                avg30EUR: c.avg30EUR ? parseFloat(c.avg30EUR) : null,
                 marketUrl: c.directMarketUrl || '#',
                 priceSource: c.priceSource || 'Cardmarket NL'
             }));
@@ -533,7 +533,7 @@
                             </div>
                             <div>
                                 <p class="text-xs font-extrabold text-white">${card.condition}</p>
-                                <p class="text-[10px] text-brand-textMuted font-medium">${card.priceSource}</p>
+                                <p class="text-[10px] text-amber-300/80 font-medium">${card.priceSource}</p>
                             </div>
                         </div>
                         <span class="text-xs font-black text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
@@ -564,7 +564,11 @@
             }
 
             const marketBtnIcon = card.isGraded ? 'fa-chart-line' : 'fa-arrow-up-right-from-square';
-            const marketBtnText = card.isGraded ? 'Check PriceCharting Koers' : 'Check Cardmarket NL';
+            const marketBtnText = card.isGraded ? 'Bekijk PriceCharting Koersverloop' : 'Bekijk op Cardmarket NL';
+
+            const sourceBadgeColor = card.priceSource.includes("Geverifieerd") 
+                ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" 
+                : (card.isGraded ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-brand-cyan bg-brand-cyan/10 border-brand-cyan/20");
 
             cardEl.innerHTML = `
                 <div class="flex items-start justify-between gap-3">
@@ -600,6 +604,16 @@
                             <i class="fa-solid fa-pen text-[10px] text-brand-textMuted group-hover:text-brand-mint transition"></i>
                         </div>
                     </div>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px] pt-0.5">
+                    <span class="px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${sourceBadgeColor}">
+                        <i class="fa-solid fa-circle-check text-[9px] mr-1"></i>${card.priceSource}
+                    </span>
+                    ${card.lowPriceEUR ? `
+                    <span class="text-brand-textMuted font-semibold text-[11px]">
+                        Bodem: <span class="text-white font-bold">€ ${card.lowPriceEUR.toFixed(2)}</span>
+                    </span>` : ''}
                 </div>
 
                 ${conditionHTML}
