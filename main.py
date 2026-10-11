@@ -2,6 +2,7 @@ import os
 import json
 import re
 import urllib.parse
+import asyncio
 from typing import Optional, List, Dict, Any
 
 import httpx
@@ -10,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Fast Precision Engine", version="12.0.0")
+app = FastAPI(title="BRIMI Fast Precision Engine", version="12.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -266,7 +267,7 @@ def health_check():
     key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
     return {
         "status": "online",
-        "engine": "BRIMI Fast Precision Engine 12.0 (Direct Flash + TCGdex)",
+        "engine": "BRIMI Fast Precision Engine 12.1 (Active Safe AI + TCGdex)",
         "gemini_api_key_configured": key_configured
     }
 
@@ -326,6 +327,13 @@ Retourneer ALLEEN een geldige JSON array.
                 }
             ]
         }],
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"}
+        ],
         "generationConfig": {
             "responseMimeType": "application/json",
             "temperature": 0.1,
@@ -336,8 +344,7 @@ Retourneer ALLEEN een geldige JSON array.
     raw_text = ""
     last_error = ""
 
-    # Snelheidsoptimalisatie: Direct gemini-2.0-flash aanroepen zonder vertragende GET /models roundtrip
-    candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
+    candidate_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
 
     async with httpx.AsyncClient(timeout=25.0) as client:
         for model_name in candidate_models:
@@ -345,21 +352,34 @@ Retourneer ALLEEN een geldige JSON array.
             try:
                 res = await client.post(url, json=gemini_body)
                 if res.status_code == 200:
-                    cands = res.json().get("candidates", [])
+                    data = res.json()
+                    cands = data.get("candidates", [])
                     if cands:
                         parts = cands[0].get("content", {}).get("parts", [])
                         raw_text = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
                         if raw_text:
                             break
+                        else:
+                            finish_r = cands[0].get("finishReason", "UNKNOWN")
+                            last_error = f"{model_name}: Lege reactie (finishReason={finish_r})"
+                    else:
+                        feedback = data.get("promptFeedback", {})
+                        block_r = feedback.get("blockReason", "Geen kandidaten geretourneerd")
+                        last_error = f"{model_name}: Afbeelding geblokkeerd ({block_r})"
                 else:
-                    last_error = f"{model_name} HTTP {res.status_code}"
+                    err_msg = ""
+                    try:
+                        err_msg = res.json().get("error", {}).get("message", res.text[:120])
+                    except Exception:
+                        err_msg = res.text[:120]
+                    last_error = f"{model_name} (HTTP {res.status_code}: {err_msg})"
             except Exception as e:
-                last_error = str(e)
+                last_error = f"{model_name} Network Error: {str(e)}"
 
     if not raw_text:
         return JSONResponse(
             status_code=502,
-            content={"detail": f"Analyse mislukt door AI provider ({last_error})."}
+            content={"detail": f"Analyse mislukt door AI provider: {last_error or 'Geen antwoord ontvangen'}"}
         )
 
     cards_data = robust_parse_cards(raw_text)
