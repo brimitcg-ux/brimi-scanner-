@@ -370,7 +370,8 @@
                 const canvas = document.createElement('canvas');
                 let w = img.naturalWidth || img.width;
                 let h = img.naturalHeight || img.height;
-                const maxDim = 800;
+                // Verhoogd naar 1400 voor haarscherpe OCR van kaartnamen en nummers
+                const maxDim = 1400;
 
                 if (w > maxDim || h > maxDim) {
                     if (w > h) {
@@ -387,7 +388,8 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
 
-                const compressed = canvas.toDataURL('image/jpeg', 0.70);
+                // Kwaliteit 0.85 voor kristalheldere tekstherkenning
+                const compressed = canvas.toDataURL('image/jpeg', 0.85);
                 imageDisplay.src = compressed;
                 lastProcessedBase64 = compressed.split(',')[1];
 
