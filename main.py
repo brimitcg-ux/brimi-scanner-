@@ -348,8 +348,9 @@ Retourneer ALLEEN een geldige JSON array.
     last_error = ""
 
     candidate_models = [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.8-flash-lite",
         "gemini-2.5-flash"
     ]
 
@@ -390,6 +391,9 @@ Retourneer ALLEEN een geldige JSON array.
                         break
                     elif res.status_code == 503:
                         last_error = f"{model_name} tijdelijk overbelast (HTTP 503)"
+                        continue
+                    elif res.status_code == 404:
+                        last_error = f"{model_name} niet meer beschikbaar (HTTP 404)"
                         continue
                     else:
                         err_msg = ""
