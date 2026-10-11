@@ -158,7 +158,7 @@
                 <span class="text-brand-mint">Weet direct de waarde.</span>
             </h2>
             <p class="text-xs sm:text-sm text-brand-textMuted font-medium max-w-md sm:mx-auto">
-                Cardmarket NL voor losse kaarten en PriceCharting veilingkoersen voor gecertificeerde slabs.
+                Officiële Cardmarket NL beurskoersen voor losse kaarten en PriceCharting voor graded slabs.
             </p>
         </div>
 
@@ -184,7 +184,7 @@
                             Maak een foto of kies uit bibliotheek
                         </p>
                         <p class="text-xs text-brand-textMuted font-medium">
-                            Herkent singles, meerdere kaarten en graded slabs (PSA / CGC / BGS)
+                            Herkent singles, meerdere kaarten tegelijk en slabs (PSA / CGC / BGS)
                         </p>
                     </div>
 
@@ -216,7 +216,7 @@
             </div>
 
             <p id="status-subtitle" class="text-xs text-brand-textMuted font-medium">
-                Leest serie, kaartnummer en raadpleegt marktprijzen...
+                Leest serie, kaartnummer en raadpleegt officiële beursdata...
             </p>
         </div>
 
@@ -274,9 +274,9 @@
                         <i class="fa-solid fa-bolt"></i>
                     </div>
                     <div class="space-y-1">
-                        <h4 class="text-sm font-extrabold text-white">Geen Urenlang Speurwerk</h4>
+                        <h4 class="text-sm font-extrabold text-white">Officiële Cardmarket Trenddata</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Binnen één seconde de actuele marktwaarde zonder eindeloos handmatig zoeken op Cardmarket.
+                            Koppelt setcodes en kaartnummers rechtstreeks aan actuele Europese beursdata, inclusief laagste bodemprijzen.
                         </p>
                     </div>
                 </div>
@@ -286,9 +286,9 @@
                         <i class="fa-solid fa-gem"></i>
                     </div>
                     <div class="space-y-1">
-                        <h4 class="text-sm font-extrabold text-white">PriceCharting Slab Koersen</h4>
+                        <h4 class="text-sm font-extrabold text-white">PriceCharting Slabs & Certificaat-check</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Herkent PSA-, CGC- en Beckett-labels en toont direct de werkelijke veilingwaarde van de slab.
+                            Herkent PSA-, CGC- en BGS-labels en verifieert direct het certificaatnummer bij het gradingbedrijf.
                         </p>
                     </div>
                 </div>
@@ -300,7 +300,7 @@
                     <div class="space-y-1">
                         <h4 class="text-sm font-extrabold text-white">1-Tik Community Aanbod</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief vraagprijs en conditie.
+                            Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief gecertificeerde setnaam en vraagprijs.
                         </p>
                     </div>
                 </div>
@@ -401,13 +401,13 @@
         });
 
         async function executeScan(base64Data) {
-            statusTitle.textContent = "Kaart herkennen...";
-            statusSubtitle.textContent = "Kaarten en nummers identificeren...";
+            statusTitle.textContent = "Kaart & Setcode herkennen...";
+            statusSubtitle.textContent = "Nummer en set-afkorting identificeren...";
             progressBar.style.width = "45%";
 
             const progressTimer = setTimeout(() => {
-                statusTitle.textContent = "Beursdata raadplegen...";
-                statusSubtitle.textContent = "Cardmarket Trend & PriceCharting ophalen...";
+                statusTitle.textContent = "Cardmarket Database raadplegen...";
+                statusSubtitle.textContent = "Officiële beurskoersen (Trend / Bodem / Avg30) koppelen...";
                 progressBar.style.width = "80%";
             }, 1200);
 
@@ -488,6 +488,8 @@
                 isGraded: !!c.isGraded,
                 gradingCompany: c.gradingCompany || null,
                 grade: c.grade || null,
+                certNumber: c.certNumber || null,
+                certUrl: c.certUrl || null,
                 basePriceNM: parseFloat(c.basePriceNM || c.estimatedPriceEUR || 3.0),
                 currentPrice: parseFloat(c.estimatedPriceEUR || 3.0),
                 lowPriceEUR: c.lowPriceEUR ? parseFloat(c.lowPriceEUR) : null,
@@ -536,9 +538,13 @@
                                 <p class="text-[10px] text-amber-300/80 font-medium">${card.priceSource}</p>
                             </div>
                         </div>
-                        <span class="text-xs font-black text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                            Grade ${card.grade || ''}
-                        </span>
+                        <div class="text-right">
+                            <span class="text-xs font-black text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                                Grade ${card.grade || ''}
+                            </span>
+                            ${card.certNumber ? `
+                            <p class="text-[10px] text-brand-textMuted font-mono mt-1">#${card.certNumber}</p>` : ''}
+                        </div>
                     </div>
                 `;
             } else {
@@ -566,7 +572,8 @@
             const marketBtnIcon = card.isGraded ? 'fa-chart-line' : 'fa-arrow-up-right-from-square';
             const marketBtnText = card.isGraded ? 'Bekijk PriceCharting Koersverloop' : 'Bekijk op Cardmarket NL';
 
-            const sourceBadgeColor = card.priceSource.includes("Geverifieerd") 
+            const isVerified = card.priceSource.includes("Geverifieerd");
+            const sourceBadgeColor = isVerified 
                 ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" 
                 : (card.isGraded ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-brand-cyan bg-brand-cyan/10 border-brand-cyan/20");
 
@@ -595,7 +602,7 @@
 
                     <div class="text-right shrink-0">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-brand-textMuted">
-                            ${card.isGraded ? 'Slab Koers' : 'Richtprijs'}
+                            ${card.isGraded ? 'Slab Koers' : (isVerified ? 'Cardmarket Trend' : 'Richtprijs')}
                         </p>
                         <div onclick="editCardPrice(${card.id})" class="inline-flex items-center gap-1.5 cursor-pointer group bg-brand-surface/80 hover:bg-brand-surface border border-brand-border hover:border-brand-mint/50 px-3 py-1.5 rounded-2xl transition">
                             <span class="text-base font-black text-brand-mint" id="price-val-${card.id}">
@@ -606,14 +613,14 @@
                     </div>
                 </div>
 
-                <div class="flex items-center justify-between text-[11px] pt-0.5">
+                <div class="flex flex-wrap items-center justify-between text-[11px] pt-0.5 gap-2">
                     <span class="px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${sourceBadgeColor}">
-                        <i class="fa-solid fa-circle-check text-[9px] mr-1"></i>${card.priceSource}
+                        <i class="fa-solid ${isVerified ? 'fa-badge-check' : 'fa-circle-check'} text-[9px] mr-1"></i>${card.priceSource}
                     </span>
-                    ${card.lowPriceEUR ? `
-                    <span class="text-brand-textMuted font-semibold text-[11px]">
-                        Bodem: <span class="text-white font-bold">€ ${card.lowPriceEUR.toFixed(2)}</span>
-                    </span>` : ''}
+                    <div class="flex items-center gap-3 text-brand-textMuted font-medium text-[11px]">
+                        ${card.lowPriceEUR ? `<span>Bodem: <strong class="text-white font-bold">€ ${card.lowPriceEUR.toFixed(2)}</strong></span>` : ''}
+                        ${card.avg30EUR ? `<span>30d Gem: <strong class="text-white font-bold">€ ${card.avg30EUR.toFixed(2)}</strong></span>` : ''}
+                    </div>
                 </div>
 
                 ${conditionHTML}
@@ -623,6 +630,12 @@
                         <i class="fa-solid ${marketBtnIcon} text-brand-cyan"></i>
                         <span>${marketBtnText}</span>
                     </a>
+
+                    ${card.certUrl ? `
+                    <a href="${card.certUrl}" target="_blank" rel="noopener noreferrer" class="w-full py-2 rounded-full bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 font-extrabold text-xs transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-certificate text-amber-400"></i>
+                        <span>Verifieer Certificaat #${card.certNumber}</span>
+                    </a>` : ''}
 
                     <button onclick="shareWhatsAppSingle(${card.id})" class="w-full py-3 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs transition shadow-lg flex items-center justify-center gap-2 active:scale-[0.99]">
                         <i class="fa-brands fa-whatsapp text-sm"></i>
@@ -681,6 +694,8 @@
             const numLabel = card.setTotal ? `${card.number}/${card.setTotal}` : `${card.number}`;
             const setCodeLabel = card.setCode ? `${card.setCode} ` : '';
 
+            const certLine = (card.isGraded && card.certNumber) ? `\n🏷️ Certificaat: #${card.certNumber}` : '';
+
             const text = 
 `Hey community! 👋
 
@@ -689,7 +704,7 @@ Hierbij bied ik mijn kaart aan:
 🃏 ${card.name} (${setCodeLabel}${numLabel})
 📍 Serie: ${card.setName}
 🌐 Taal: ${flag} ${card.language}
-✨ Conditie: ${card.condition}
+✨ Conditie: ${card.condition}${certLine}
 💶 Prijs: € ${card.currentPrice.toFixed(2)}
 
 Stuur gerust een berichtje bij interesse! 🤝`;
@@ -704,7 +719,8 @@ Stuur gerust een berichtje bij interesse! 🤝`;
                 const flag = getFlag(c.languageCode);
                 const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${c.number}`;
                 const setCodeLabel = c.setCode ? `${c.setCode} ` : '';
-                return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}\n💶 Prijs: € ${c.currentPrice.toFixed(2)}`;
+                const certLine = (c.isGraded && c.certNumber) ? `\n🏷️ Cert: #${c.certNumber}` : '';
+                return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}${certLine}\n💶 Prijs: € ${c.currentPrice.toFixed(2)}`;
             }).join('\n\n');
 
             const text = 
