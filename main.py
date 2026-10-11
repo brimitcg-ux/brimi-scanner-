@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Fast Precision Engine", version="12.1.0")
+app = FastAPI(title="BRIMI Fast Precision Engine", version="12.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -264,21 +264,24 @@ def robust_parse_cards(raw_text: str) -> List[Dict[str, Any]]:
 
 @app.get("/")
 def health_check():
-    key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
+    raw_keys = os.getenv("GEMINI_API_KEY", "").strip()
+    keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
     return {
         "status": "online",
-        "engine": "BRIMI Fast Precision Engine 12.1 (Active Safe AI + TCGdex)",
-        "gemini_api_key_configured": key_configured
+        "engine": "BRIMI Fast Precision Engine 12.2 (Multi-Key Rotation + TCGdex)",
+        "configured_keys_count": len(keys)
     }
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
-    key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not key:
+    raw_keys = os.getenv("GEMINI_API_KEY", "").strip()
+    if not raw_keys:
         return JSONResponse(
             status_code=500,
             content={"detail": "GEMINI_API_KEY ontbreekt in Render Environment Variables."}
         )
+
+    api_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
 
     clean_b64 = payload.image_base64
     if "," in clean_b64:
@@ -344,42 +347,64 @@ Retourneer ALLEEN een geldige JSON array.
     raw_text = ""
     last_error = ""
 
-    candidate_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
+    # Verschillende modellen met eigen quotapools
+    candidate_models = [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-flash-latest"
+    ]
 
     async with httpx.AsyncClient(timeout=25.0) as client:
-        for model_name in candidate_models:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
-            try:
-                res = await client.post(url, json=gemini_body)
-                if res.status_code == 200:
-                    data = res.json()
-                    cands = data.get("candidates", [])
-                    if cands:
-                        parts = cands[0].get("content", {}).get("parts", [])
-                        raw_text = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
-                        if raw_text:
-                            break
+        for key_idx, key in enumerate(api_keys):
+            key_exhausted = False
+            for model_name in candidate_models:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+                try:
+                    res = await client.post(url, json=gemini_body)
+                    if res.status_code == 200:
+                        data = res.json()
+                        cands = data.get("candidates", [])
+                        if cands:
+                            parts = cands[0].get("content", {}).get("parts", [])
+                            raw_text = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
+                            if raw_text:
+                                break
+                            else:
+                                finish_r = cands[0].get("finishReason", "UNKNOWN")
+                                last_error = f"{model_name}: Lege reactie ({finish_r})"
                         else:
-                            finish_r = cands[0].get("finishReason", "UNKNOWN")
-                            last_error = f"{model_name}: Lege reactie (finishReason={finish_r})"
+                            feedback = data.get("promptFeedback", {})
+                            block_r = feedback.get("blockReason", "Geen kandidaten")
+                            last_error = f"{model_name}: Geblokkeerd ({block_r})"
+                    elif res.status_code == 429:
+                        last_error = f"Sleutel {key_idx + 1} limiet bereikt (HTTP 429)"
+                        key_exhausted = True
+                        break
+                    elif res.status_code == 503:
+                        last_error = f"{model_name} tijdelijk overbelast (HTTP 503)"
+                        continue
                     else:
-                        feedback = data.get("promptFeedback", {})
-                        block_r = feedback.get("blockReason", "Geen kandidaten geretourneerd")
-                        last_error = f"{model_name}: Afbeelding geblokkeerd ({block_r})"
-                else:
-                    err_msg = ""
-                    try:
-                        err_msg = res.json().get("error", {}).get("message", res.text[:120])
-                    except Exception:
-                        err_msg = res.text[:120]
-                    last_error = f"{model_name} (HTTP {res.status_code}: {err_msg})"
-            except Exception as e:
-                last_error = f"{model_name} Network Error: {str(e)}"
+                        err_msg = ""
+                        try:
+                            err_msg = res.json().get("error", {}).get("message", res.text[:120])
+                        except Exception:
+                            err_msg = res.text[:120]
+                        last_error = f"{model_name} (HTTP {res.status_code}: {err_msg})"
+                except Exception as e:
+                    last_error = f"{model_name} Network Error: {str(e)}"
+
+            if raw_text:
+                break
+            if not key_exhausted and not raw_text:
+                continue
 
     if not raw_text:
         return JSONResponse(
             status_code=502,
-            content={"detail": f"Analyse mislukt door AI provider: {last_error or 'Geen antwoord ontvangen'}"}
+            content={
+                "detail": f"AI Analyse tijdelijk niet gelukt ({last_error}). Probeer het over een minuutje nogmaals."
+            }
         )
 
     cards_data = robust_parse_cards(raw_text)
@@ -389,7 +414,7 @@ Retourneer ALLEEN een geldige JSON array.
             content={"detail": "Geen kaartgegevens kunnen structureren uit het antwoord."}
         )
 
-    # Snelle parallelle bevraging van TCGdex (binnen 200ms)
+    # Snelle bevraging van TCGdex
     async with httpx.AsyncClient() as dex_client:
         tasks = [
             query_tcgdex(dex_client, c.get("setCode", ""), c.get("cardName", ""), str(c.get("cardNumber", "")))
