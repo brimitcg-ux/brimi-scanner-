@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Precision Database Engine", version="10.0.0")
+app = FastAPI(title="BRIMI Precision Database Engine", version="11.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,7 +33,7 @@ class ScanRequest(BaseModel):
     mime_type: Optional[str] = "image/jpeg"
 
 # ---------------------------------------------------------------------------
-# OFFICIËLE POKÉMON SET-CODE & ID DICTIONARY (INCL. 30TH CELEBRATION)
+# OFFICIËLE POKÉMON SET-CODE DICTIONARY
 # ---------------------------------------------------------------------------
 SET_CODE_MAP: Dict[str, Dict[str, str]] = {
     # 30th Anniversary & Special Expansions
@@ -120,12 +120,10 @@ def clean_card_number(raw_num: str) -> str:
     stripped = re.sub(r"^0+", "", main_num)
     return stripped or "0"
 
-def get_base_cardmarket_url(card_name: str, card_number: str, set_name: Optional[str] = None) -> str:
+def get_base_cardmarket_url(card_name: str, card_number: str) -> str:
     clean_num = clean_card_number(card_number)
-    terms = [card_name, clean_num]
-    if set_name and set_name != "Onbekende Set":
-        terms.append(set_name)
-    query = " ".join(terms).strip()
+    # Zoeken op Kaartnaam + Nummer is het meest trefzeker op Cardmarket
+    query = f"{card_name} {clean_num}".strip()
     return f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(query)}&sellerCountry=17&minCondition=2"
 
 def get_pricecharting_url(card_name: str, card_number: str, set_name: Optional[str] = None) -> str:
@@ -151,6 +149,32 @@ def get_cert_url(company: Optional[str], cert_num: Optional[str]) -> Optional[st
         return f"https://www.beckett.com/grading/card-lookup?item_type=BGS&item_id={clean_cert}"
     return None
 
+async def query_cardmarket_live_nl(client: httpx.AsyncClient, card_name: str, card_number: str) -> Optional[float]:
+    """Probeert rechtstreeks de laagste Cardmarket NL prijs op te halen."""
+    clean_num = clean_card_number(card_number)
+    query = f"{card_name} {clean_num}".strip()
+    url = f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(query)}&sellerCountry=17&minCondition=2"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
+    }
+    try:
+        res = await client.get(url, headers=headers, timeout=2.2, follow_redirects=True)
+        if res.status_code == 200:
+            prices = re.findall(r'(\d+[\.,]\d{2})\s*€', res.text)
+            if prices:
+                parsed = []
+                for p in prices[:12]:
+                    v = float(p.replace(",", "."))
+                    if 0.10 <= v <= 2500.0:
+                        parsed.append(v)
+                if parsed:
+                    return min(parsed)
+    except Exception:
+        pass
+    return None
+
 async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str, card_number: str) -> Optional[Dict[str, Any]]:
     clean_num = clean_card_number(card_number)
     raw_num = str(card_number).split("/")[0].strip()
@@ -161,7 +185,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
         for try_num in [raw_num, clean_num]:
             url = f"https://api.tcgdex.net/v2/en/sets/{set_id}/{try_num}"
             try:
-                res = await client.get(url, timeout=2.2)
+                res = await client.get(url, timeout=2.0)
                 if res.status_code == 200:
                     detail = res.json()
                     cm = detail.get("pricing", {}).get("cardmarket", {})
@@ -185,7 +209,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
         search_q = clean_name or card_name
         try:
             url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(search_q)}"
-            res = await client.get(url, timeout=2.0)
+            res = await client.get(url, timeout=1.8)
             if res.status_code == 200:
                 cands = res.json()
                 if isinstance(cands, list):
@@ -194,7 +218,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
                         if cand_local in [clean_num, raw_num] or clean_card_number(cand_local) == clean_num:
                             card_id = cand.get("id")
                             if card_id:
-                                d_res = await client.get(f"https://api.tcgdex.net/v2/en/cards/{card_id}", timeout=2.0)
+                                d_res = await client.get(f"https://api.tcgdex.net/v2/en/cards/{card_id}", timeout=1.8)
                                 if d_res.status_code == 200:
                                     detail = d_res.json()
                                     cm = detail.get("pricing", {}).get("cardmarket", {})
@@ -263,7 +287,7 @@ def robust_parse_cards(raw_text: str) -> List[Dict[str, Any]]:
             obj["grade"] = grade_m.group(1) if grade_m else None
             obj["certNumber"] = cert_m.group(1) if cert_m else None
             obj["condition"] = f"{obj['gradingCompany']} {obj['grade']}" if obj["isGraded"] else "Near Mint (NM)"
-            obj["marketEstimateEUR"] = float(price_m.group(1)) if price_m else 4.00
+            obj["marketEstimateEUR"] = float(price_m.group(1)) if price_m else 2.50
             card_objects.append(obj)
 
     return card_objects
@@ -273,7 +297,7 @@ def health_check():
     key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
     return {
         "status": "online",
-        "engine": "BRIMI Precision Database Engine 10.0 (30th Celebration + Cardmarket Live)",
+        "engine": "BRIMI Precision Database Engine 11.0 (Lowest CM NL + TCGdex)",
         "gemini_api_key_configured": key_configured
     }
 
@@ -292,45 +316,48 @@ async def scan_cards(payload: ScanRequest):
     clean_b64 = clean_b64.replace("\n", "").replace("\r", "").strip()
 
     prompt = """
-Je bent een officiële Pokémon TCG visuele OCR-analist. Analyseer alle officiële Pokémon kaarten op de afbeelding.
+Je bent een officiële Pokémon TCG OCR-analist. Analyseer alle officiële Pokémon kaarten op de foto.
 
-BELANGRIJKE INSTRUCTIE VOOR MODERNE & JUBILEUMSETS:
-- Kaarten met setcode "30C" of een 30-jaar stempel (zoals Pikachu ex 149/128 SIR of 053/128) zijn 100% OFFICIËLE kaarten uit de "30th Celebration" set!
-- Markeer deze NOOIT als "Custom" of "Fan Art".
-- Special Illustration Rares (SIR) zoals Pikachu ex 149/128 hebben een reële beurswaarde van circa € 65.00 tot € 75.00.
+BELANGRIJKE INSTRUCTIE VOOR 30TH CELEBRATION (30C) & ZELDZAAMHEDEN:
+- Kaarten met setcode "30C" of 30-jaar stempel zijn 100% OFFICIËLE kaarten uit de "30th Celebration" set. NOOIT "Custom" of "Fan Art"!
+- ONDERSCHEID REGULIERE ILLUSTRATION RARES STRIKT VAN SPECIAL ILLUSTRATION RARES (SIR):
+  * Illustration Rare (IR) zoals Alolan Exeggutor 129/128, Drifloon, Goldeen etc. hebben een reële Cardmarket marktwaarde van slechts € 2.00 tot € 3.50! Schat deze NOOIT op € 35!
+  * Alleen echte top-chase Special Illustration Rares (SIR) zoals Pikachu ex 149/128 zijn circa € 65.00 tot € 75.00.
+  * Reguliere ex / GX / V kaarten zijn circa € 1.00 tot € 2.00.
+  * Holo / Reverse Holo / Commons zijn € 0.20 tot € 0.80.
 
-Lees voor ELKE kaart met uiterste precisie:
-1. cardName: Officiële kaartnaam (bijv. "Pikachu ex", "Naganadel-GX", "Goldeen", "Charizard ex").
-2. cardNumber: Nummer vóór de slash (bijv. "149", "064", "230").
-3. setTotal: Nummer ná de slash (bijv. "128", "064", "236").
-4. setCode: De letters/cijfers linksonder (bijv. 30C, MEW, UNM, OBF, PAL, PAF, PAR, CRZ, LOR, SIT).
-5. setName: Volledige naam van de set (bijv. "30th Celebration", "151", "Unified Minds", "Paldea Evolved").
+Lees voor ELKE kaart nauwkeurig:
+1. cardName: Officiële kaartnaam (bijv. "Alolan Exeggutor", "Pikachu ex", "Naganadel-GX", "Goldeen").
+2. cardNumber: Nummer vóór de slash (bijv. "129", "149", "064").
+3. setTotal: Nummer ná de slash (bijv. "128", "064").
+4. setCode: Setcode linksonder (bijv. 30C, MEW, UNM, OBF, PAL, PAR, CRZ).
+5. setName: Volledige naam van de set (bijv. "30th Celebration", "151", "Unified Minds").
 6. language: "Engels", "Japans" of "Chinees".
 7. languageCode: "EN", "JP" of "CN".
-8. rarity: Zeldzaamheid (bijv. "Special Illustration Rare", "Illustration Rare", "Secret Rare", "Ultra Rare").
-9. isGraded: true als in PSA, CGC, BGS of PCA slab, anders false.
+8. rarity: "Illustration Rare", "Special Illustration Rare", "Ultra Rare", "Double Rare" of "Common".
+9. isGraded: true als in slab (PSA, CGC, BGS), anders false.
 10. gradingCompany: "PSA", "CGC", "BGS" of null.
-11. grade: Het cijfer op het label (bijv. "9", "9.5", "10") of null.
-12. certNumber: Het serienummer op het label of null.
-13. marketEstimateEUR: Realistische conservatieve marktwaarde in EUR (bijv. 68.00 voor Pikachu ex 149/128 SIR).
+11. grade: Cijfer op het label (bijv. "9", "10") of null.
+12. certNumber: Serienummer van het label of null.
+13. marketEstimateEUR: Realistische conservatieve Cardmarket bodem/richtprijs in EUR (bijv. 2.40 voor Alolan Exeggutor 129/128, 68.00 voor Pikachu ex 149/128 SIR).
 
 Retourneer ALLEEN een geldige JSON array:
 [
   {
-    "cardName": "Pikachu ex",
-    "cardNumber": "149",
+    "cardName": "Alolan Exeggutor",
+    "cardNumber": "129",
     "setTotal": "128",
     "setCode": "30C",
     "setName": "30th Celebration",
     "language": "Engels",
     "languageCode": "EN",
-    "rarity": "Special Illustration Rare",
+    "rarity": "Illustration Rare",
     "isGraded": false,
     "gradingCompany": null,
     "grade": null,
     "certNumber": null,
     "condition": "Near Mint (NM)",
-    "marketEstimateEUR": 68.00
+    "marketEstimateEUR": 2.40
   }
 ]
 """
@@ -358,7 +385,7 @@ Retourneer ALLEEN een geldige JSON array:
     raw_text = ""
     last_error = ""
 
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with httpx.AsyncClient(timeout=40.0) as client:
         candidate_models = []
         try:
             m_res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
@@ -405,16 +432,20 @@ Retourneer ALLEEN een geldige JSON array:
         )
 
     async with httpx.AsyncClient() as cm_client:
-        enrich_tasks = [
-            query_tcgdex(
-                cm_client,
-                c.get("setCode", ""),
-                c.get("cardName", ""),
-                str(c.get("cardNumber", ""))
-            )
+        # Stap 1: Parallel zoeken naar Laagste CM NL en TCGdex data
+        tasks_cm_nl = [
+            query_cardmarket_live_nl(cm_client, c.get("cardName", ""), str(c.get("cardNumber", "")))
             for c in cards_data
         ]
-        enriched_results = await asyncio.gather(*enrich_tasks, return_exceptions=True)
+        tasks_tcgdex = [
+            query_tcgdex(cm_client, c.get("setCode", ""), c.get("cardName", ""), str(c.get("cardNumber", "")))
+            for c in cards_data
+        ]
+
+        cm_nl_results, tcgdex_results = await asyncio.gather(
+            asyncio.gather(*tasks_cm_nl, return_exceptions=True),
+            asyncio.gather(*tasks_tcgdex, return_exceptions=True)
+        )
 
     results = []
     for idx, c in enumerate(cards_data):
@@ -428,11 +459,11 @@ Retourneer ALLEEN een geldige JSON array:
         if set_code in SET_CODE_MAP:
             resolved_set_name = SET_CODE_MAP[set_code]["name"]
 
-        ai_price = float(c.get("marketEstimateEUR") or 3.50)
+        ai_price = float(c.get("marketEstimateEUR") or 2.50)
 
-        cm_data = None
-        if idx < len(enriched_results) and isinstance(enriched_results[idx], dict):
-            cm_data = enriched_results[idx]
+        # Resultaten uit externe checks
+        live_nl_price = cm_nl_results[idx] if (idx < len(cm_nl_results) and isinstance(cm_nl_results[idx], (int, float))) else None
+        tcgdex_data = tcgdex_results[idx] if (idx < len(tcgdex_results) and isinstance(tcgdex_results[idx], dict)) else None
 
         low_price_eur = None
         avg30_eur = None
@@ -442,17 +473,32 @@ Retourneer ALLEEN een geldige JSON array:
             price_source = f"PriceCharting Veilingkoers ({c.get('gradingCompany', 'Slab')} {c.get('grade', '')})".strip()
             final_price = ai_price
         else:
-            target_url = get_base_cardmarket_url(card_name, card_num, resolved_set_name)
-            if cm_data and (cm_data.get("trend") or cm_data.get("low")):
-                final_price = cm_data.get("trend") or cm_data.get("low")
-                low_price_eur = cm_data.get("low")
-                avg30_eur = cm_data.get("avg30")
+            target_url = get_base_cardmarket_url(card_name, card_num)
+
+            # PRIORITEIT 1: Lowest Cardmarket in NL
+            if live_nl_price and live_nl_price > 0.15:
+                final_price = live_nl_price
+                low_price_eur = live_nl_price
+                price_source = "Cardmarket NL Bodem (Laagste NL)"
+            # PRIORITEIT 2: Cardmarket Low via TCGdex
+            elif tcgdex_data and tcgdex_data.get("low"):
+                final_price = tcgdex_data["low"]
+                low_price_eur = tcgdex_data["low"]
+                avg30_eur = tcgdex_data.get("avg30")
+                price_source = "Cardmarket Bodem (EU Laagste)"
+                if tcgdex_data.get("official_set"):
+                    resolved_set_name = tcgdex_data["official_set"]
+            # PRIORITEIT 3: Cardmarket Trend
+            elif tcgdex_data and tcgdex_data.get("trend"):
+                final_price = tcgdex_data["trend"]
+                avg30_eur = tcgdex_data.get("avg30")
                 price_source = "Cardmarket Trend (Geverifieerd)"
-                if cm_data.get("official_set"):
-                    resolved_set_name = cm_data["official_set"]
+                if tcgdex_data.get("official_set"):
+                    resolved_set_name = tcgdex_data["official_set"]
+            # PRIORITEIT 4: Gekalibreerde Conservatieve Richtprijs
             else:
                 final_price = ai_price
-                price_source = "Cardmarket NL Marktindicatie"
+                price_source = "Cardmarket NL Richtprijs"
 
         cert_verification_url = get_cert_url(c.get("gradingCompany"), cert_num) if is_graded else None
 
