@@ -100,25 +100,25 @@ animation: laser-sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 </style>
 </head>
 <body class="font-sans antialiased flex flex-col justify-between selection:bg-brand-mint selection:text-brand-bg pb-12">
-<!-- Header in de minimalistische agency-stijl zonder groene stippen -->
+<!-- Header: Strakke agency navigatie zonder rechtertekst -->
 <header class="border-b border-brand-border/60 bg-brand-bg/90 backdrop-blur-xl sticky top-0 z-40">
 <div class="max-w-2xl mx-auto px-5 py-3.5 flex justify-between items-center">
 <div class="flex items-center gap-3">
-<!-- TCG Kaart Icon met Agency Gradient -->
-<div class="w-9 h-9 rounded-xl agency-logo-gradient p-[1.5px] shadow-lg flex items-center justify-center">
+<!-- Pokéball Icon uit het BRIMI-logo in Agency Gradient -->
+<div class="w-9 h-9 rounded-xl agency-logo-gradient p-[1.5px] shadow-lg flex items-center justify-center shrink-0">
 <div class="w-full h-full bg-brand-bg rounded-[10px] flex items-center justify-center">
 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none">
-<!-- Achterste kaart schuin -->
-<rect x="7" y="2.5" width="12" height="16" rx="2" stroke="#1e5bff" stroke-width="1.8" transform="rotate(8 13 10.5)" />
-<!-- Voorste kaart recht -->
-<rect x="4" y="4" width="12.5" height="16.5" rx="2" stroke="url(#tcg_grad)" stroke-width="2" fill="#0b1324"/>
-<!-- Kaart illustratievak -->
-<rect x="6" y="6" width="8.5" height="6.5" rx="1" stroke="#00c8ff" stroke-width="1.2" opacity="0.85"/>
-<!-- Tekstregeltjes op kaart -->
-<path d="M6 14.5H13" stroke="#00e5b0" stroke-width="1.4" stroke-linecap="round"/>
-<path d="M6 17H10.5" stroke="#7f93b0" stroke-width="1.2" stroke-linecap="round"/>
+<!-- Bovenste helft Pokéball in cyaan glow -->
+<path d="M12 2C6.48 2 2 6.48 2 12C2 12.34 2.02 12.67 2.05 13H8.1C8.56 10.72 10.08 9.2 12 9.2C13.92 9.2 15.44 10.72 15.9 13H21.95C21.98 12.67 22 12.34 22 12C22 6.48 17.52 2 12 2Z" fill="url(#pb_top)"/>
+<!-- Onderste helft Pokéball in diep dark navy -->
+<path d="M2.05 15C2.5 19.05 6.01 22 12 22C17.99 22 21.5 19.05 21.95 15H15.9C15.44 17.28 13.92 18.8 12 18.8C10.08 18.8 8.56 17.28 8.1 15H2.05Z" fill="#101a30" stroke="#182744" stroke-width="0.8"/>
+<!-- Horizontale center balk -->
+<path d="M2 13.5H8.2M15.8 13.5H22" stroke="#00e5b0" stroke-width="1.6" stroke-linecap="round"/>
+<!-- Center Pokéball cirkelknop -->
+<circle cx="12" cy="14" r="3.2" fill="#0b1324" stroke="#00e5b0" stroke-width="1.8"/>
+<circle cx="12" cy="14" r="1.4" fill="#00e5b0"/>
 <defs>
-<linearGradient id="tcg_grad" x1="4" y1="4" x2="16.5" y2="20.5" gradientUnits="userSpaceOnUse">
+<linearGradient id="pb_top" x1="2" y1="2" x2="22" y2="13" gradientUnits="userSpaceOnUse">
 <stop stop-color="#00c8ff"/>
 <stop offset="1" stop-color="#00e5b0"/>
 </linearGradient>
@@ -133,14 +133,12 @@ Nederlandse PKMN prijzen checker
 </span>
 </div>
 </div>
-<!-- Clean rechtsboven zonder groen pulserend bolletje -->
-<div class="flex items-center">
-<span class="text-[11px] font-bold text-brand-textMuted tracking-wider uppercase">SCAN ENGINE</span>
-</div>
+<!-- Rechtsboven nu volledig leeg voor maximale rust -->
+<div></div>
 </div>
 </header>
 <main class="max-w-2xl mx-auto w-full px-5 py-8 flex-grow flex flex-col gap-7">
-<!-- Hero Kop in de typografische agency-stijl -->
+<!-- Hero Kop in de agency-stijl -->
 <div class="space-y-2 text-left sm:text-center">
 <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
 Scan je kaart.<br class="sm:hidden" />
@@ -150,16 +148,16 @@ Scan je kaart.<br class="sm:hidden" />
 Cardmarket NL voor losse kaarten en PriceCharting veilingkoersen voor gecertificeerde slabs.
 </p>
 </div>
-<!-- Verborgen File Input (Veilig buiten de label geplaatst voor iOS Safari compatibiliteit) -->
-<input type="file" id="file-input" class="hidden" accept="image/*">
+<!-- Veilige File Input: onzichtbaar maar volledig actief in het DOM voor mobiele browsers -->
+<input type="file" id="file-input" accept="image/*" style="position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; z-index: -1;">
 <!-- Scanner Viewfinder Card -->
 <div class="w-full">
-<label for="file-input" id="drop-zone" class="agency-card relative block rounded-3xl p-7 sm:p-11 text-center cursor-pointer transition-all duration-300 group hover:border-brand-mint/40 active:scale-[0.99]">
+<div id="drop-zone" class="agency-card relative block rounded-3xl p-7 sm:p-11 text-center cursor-pointer transition-all duration-300 group hover:border-brand-mint/40 active:scale-[0.99]">
 <div class="vf-corner vf-tl"></div>
 <div class="vf-corner vf-tr"></div>
 <div class="vf-corner vf-bl"></div>
 <div class="vf-corner vf-br"></div>
-<div id="drop-content" class="flex flex-col items-center justify-center space-y-4 pointer-events-none py-3">
+<div id="drop-content" class="flex flex-col items-center justify-center space-y-4 py-3">
 <div class="w-16 h-16 rounded-2xl bg-brand-surface border border-brand-border flex items-center justify-center text-2xl group-hover:scale-105 group-hover:border-brand-mint/50 transition-all duration-300 shadow-xl">
 <i class="fa-solid fa-camera text-brand-textMuted group-hover:text-brand-mint transition-colors"></i>
 </div>
@@ -172,7 +170,7 @@ Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
 </p>
 </div>
 <!-- Pill Action Button in fel Mint -->
-<span class="agency-glow-btn inline-flex items-center gap-2 font-extrabold px-6 py-3 rounded-full text-xs transition shadow-lg mt-1">
+<span class="agency-glow-btn inline-flex items-center gap-2 font-extrabold px-6 py-3 rounded-full text-xs transition shadow-lg mt-1 pointer-events-none">
 <span>Foto Maken of Uploaden</span>
 <i class="fa-solid fa-arrow-right text-[11px]"></i>
 </span>
@@ -181,17 +179,17 @@ Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
 <img id="image-display" src="" alt="Gescande Pokémon kaart" class="max-h-[330px] w-auto object-contain rounded-xl">
 <div id="laser-beam" class="hidden laser-sweep"></div>
 </div>
-</label>
 </div>
-<!-- Scanning State Box -->
+</div>
+<!-- Scanning State Box met dynamische statusindicatie -->
 <div id="scanning-state" class="hidden w-full agency-card rounded-2xl p-5 text-center space-y-3">
 <div class="flex items-center justify-center gap-3">
 <i class="fa-solid fa-circle-notch fa-spin text-brand-mint text-sm"></i>
-<h3 id="status-title" class="text-xs font-black tracking-wider text-white uppercase">Kaart analyseren...</h3>
+<h3 id="status-title" class="text-xs font-black tracking-wider text-white uppercase">Foto laden...</h3>
 </div>
-<p id="status-subtitle" class="text-[11px] text-brand-textMuted">Leest serie, nummer en checkt actuele koersen...</p>
+<p id="status-subtitle" class="text-[11px] text-brand-textMuted">Afbeelding voorbereiden voor herkenning...</p>
 <div class="w-full bg-brand-bg rounded-full h-1.5 overflow-hidden border border-brand-border">
-<div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-300 rounded-full" style="width: 25%"></div>
+<div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-500 rounded-full" style="width: 25%"></div>
 </div>
 </div>
 <!-- Results Panel -->
@@ -212,7 +210,14 @@ Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
 </div>
 <div id="cards-container" class="space-y-4"></div>
 </div>
-<!-- Onderste 3 Voordelenblokken in de agency-stijl -->
+<!-- Foutmelding herkansing knop (verschijnt alleen bij storing) -->
+<div id="retry-box" class="hidden w-full agency-card rounded-2xl p-5 text-center space-y-3 border border-red-500/30">
+<p id="retry-message" class="text-xs text-red-300 font-medium">Er ging iets mis.</p>
+<button type="button" id="btn-retry" class="agency-glow-btn text-xs font-extrabold px-6 py-2.5 rounded-full">
+Opnieuw Proberen
+</button>
+</div>
+<!-- Onderste 3 Voordelenblokken -->
 <div class="pt-6 border-t border-brand-border/60 space-y-4">
 <div class="space-y-1">
 <p class="text-[11px] font-bold uppercase tracking-widest text-brand-mint">Waarom BRIMI Scanner?</p>
@@ -290,11 +295,12 @@ Begrepen
 </div>
 <script>
 const BACKEND_URL = "https://brimi-scanner.onrender.com";
-// Pre-warm ping naar Render server bij het inladen
+// Pre-warm ping naar Render server bij het openen van de pagina
 window.addEventListener('DOMContentLoaded', () => {
 fetch(⁠${BACKEND_URL}/⁠).catch(() => {});
 });
 const fileInput = document.getElementById('file-input');
+const dropZone = document.getElementById('drop-zone');
 const dropContent = document.getElementById('drop-content');
 const previewWrapper = document.getElementById('preview-wrapper');
 const imageDisplay = document.getElementById('image-display');
@@ -308,6 +314,9 @@ const statusTitle = document.getElementById('status-title');
 const statusSubtitle = document.getElementById('status-subtitle');
 const progressBar = document.getElementById('progress-bar');
 const btnReset = document.getElementById('btn-reset');
+const retryBox = document.getElementById('retry-box');
+const retryMessage = document.getElementById('retry-message');
+const btnRetry = document.getElementById('btn-retry');
 const notifyModal = document.getElementById('notify-modal');
 const notifyTitle = document.getElementById('notify-title');
 const notifyDesc = document.getElementById('notify-desc');
@@ -319,6 +328,7 @@ const btnCancelPrice = document.getElementById('btn-cancel-price');
 const btnSavePrice = document.getElementById('btn-save-price');
 let lastScannedCards = [];
 let editingIndex = null;
+let lastProcessedBase64 = null;
 function playChime() {
 try {
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -343,27 +353,34 @@ notifyDesc.textContent = message;
 notifyModal.classList.remove('hidden');
 }
 notifyClose.addEventListener('click', () => notifyModal.classList.add('hidden'));
-// Robuuste afhandeling van foto-selectie (zowel camera als bibliotheek)
+// Betrouwbare klikhandler voor dropZone (werkt gegarandeerd op iPhone Safari)
+dropZone.addEventListener('click', (e) => {
+// Voorkom dubbele trigger als men al op de preview klikt
+if (previewWrapper.contains(e.target) && !dropContent.contains(e.target)) return;
+fileInput.click();
+});
+// Verwerking van gekozen afbeelding (foto maken of bibliotheek)
 fileInput.addEventListener('change', (e) => {
 const file = e.target.files && e.target.files[0];
 if (!file) return;
-// Toon direct preview en laadstatus
+// Direct visuele feedback
 dropContent.classList.add('hidden');
 previewWrapper.classList.remove('hidden');
 laserBeam.classList.remove('hidden');
 scanningState.classList.remove('hidden');
 resultsPanel.classList.add('hidden');
+retryBox.classList.add('hidden');
 statusTitle.textContent = "Foto laden...";
-statusSubtitle.textContent = "Optimaliseert resolutie voor snelle herkenning...";
-progressBar.style.width = "25%";
-const objectUrl = URL.createObjectURL(file);
+statusSubtitle.textContent = "Afbeelding optimaliseren voor snelle verwerking...";
+progressBar.style.width = "20%";
+const reader = new FileReader();
+reader.onload = (evt) => {
 const img = new Image();
 img.onload = () => {
-URL.revokeObjectURL(objectUrl);
 const canvas = document.createElement('canvas');
 let w = img.width;
 let h = img.height;
-const maxDim = 900;
+const maxDim = 960;
 if (w > maxDim || h > maxDim) {
 if (w > h) {
 h = Math.round((h * maxDim) / w);
@@ -377,49 +394,46 @@ canvas.width = w;
 canvas.height = h;
 const ctx = canvas.getContext('2d');
 ctx.drawImage(img, 0, 0, w, h);
-const compressed = canvas.toDataURL('image/jpeg', 0.85);
+const compressed = canvas.toDataURL('image/jpeg', 0.82);
 imageDisplay.src = compressed;
-const base64Data = compressed.split(',')[1];
-executeScan(base64Data);
+lastProcessedBase64 = compressed.split(',')[1];
+executeScan(lastProcessedBase64);
 };
 img.onerror = () => {
-URL.revokeObjectURL(objectUrl);
-// Fallback via FileReader indien objectURL niet laadt
-const reader = new FileReader();
-reader.onload = (evt) => {
-const fallbackImg = new Image();
-fallbackImg.onload = () => {
-const canvas = document.createElement('canvas');
-let w = fallbackImg.width;
-let h = fallbackImg.height;
-const maxDim = 900;
-if (w > maxDim || h > maxDim) {
-if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
-else { w = Math.round((w * maxDim) / h); h = maxDim; }
-}
-canvas.width = w;
-canvas.height = h;
-const ctx = canvas.getContext('2d');
-ctx.drawImage(fallbackImg, 0, 0, w, h);
-const compressed = canvas.toDataURL('image/jpeg', 0.85);
-imageDisplay.src = compressed;
-executeScan(compressed.split(',')[1]);
+// Fallback als DOM-decoding vertraagt
+const rawData = evt.target.result;
+imageDisplay.src = rawData;
+lastProcessedBase64 = rawData.split(',')[1];
+executeScan(lastProcessedBase64);
 };
-fallbackImg.src = evt.target.result;
+img.src = evt.target.result;
+};
+reader.onerror = () => {
+showNotification("Inleesfout", "Kon het gekozen bestand niet inlezen. Probeer het opnieuw.");
+resetScanner();
 };
 reader.readAsDataURL(file);
-};
-img.src = objectUrl;
+// Reset input zodat dezelfde foto eventueel direct opnieuw geselecteerd kan worden
+fileInput.value = '';
 });
 async function executeScan(base64Data) {
 scanningState.classList.remove('hidden');
 resultsPanel.classList.add('hidden');
+retryBox.classList.add('hidden');
 cardsContainer.innerHTML = '';
 statusTitle.textContent = "Kaart analyseren...";
 statusSubtitle.textContent = "Leest serie, nummer en checkt actuele koersen...";
-progressBar.style.width = "50%";
+progressBar.style.width = "40%";
+// Dynamische progressie-updates voor prettige beleving
+const t1 = setTimeout(() => {
+progressBar.style.width = "65%";
+statusSubtitle.textContent = "Koersen verifiëren op Cardmarket NL & PriceCharting...";
+}, 1200);
+const t2 = setTimeout(() => {
+progressBar.style.width = "85%";
+statusSubtitle.textContent = "Server afronden... (bij koude start kan dit even duren)";
+}, 4000);
 try {
-setTimeout(() => { progressBar.style.width = "85%"; }, 800);
 const response = await fetch(⁠${BACKEND_URL}/api/scan⁠, {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
@@ -428,27 +442,42 @@ image_base64: base64Data,
 mime_type: 'image/jpeg'
 })
 });
+clearTimeout(t1);
+clearTimeout(t2);
 if (!response.ok) {
 const err = await response.json().catch(() => ({}));
-throw new Error(err.detail || ⁠Server fout (HTTP ${response.status})⁠);
+throw new Error(err.detail || ⁠Server reactie fout (HTTP ${response.status})⁠);
 }
 const cards = await response.json();
 if (!cards || cards.length === 0) {
-throw new Error("Geen Pokémon kaart herkend. Zorg voor voldoende licht.");
+throw new Error("Geen Pokémon kaart herkend. Zorg voor scherp beeld en goed licht.");
 }
+progressBar.style.width = "100%";
 lastScannedCards = cards;
 playChime();
 triggerHaptic();
 renderResults(lastScannedCards);
 } catch (err) {
+clearTimeout(t1);
+clearTimeout(t2);
 console.error("Scan error:", err);
-showNotification("Scan Probleem", err.message || "Er ging iets mis tijdens de scan.");
-resetScanner();
+retryMessage.textContent = err.message || "Er ging iets mis tijdens de scan.";
+retryBox.classList.remove('hidden');
+showNotification("Scan Probleem", err.message || "Er ging iets mis tijdens het scannen.");
 } finally {
 laserBeam.classList.add('hidden');
 scanningState.classList.add('hidden');
 }
 }
+btnRetry.addEventListener('click', () => {
+if (lastProcessedBase64) {
+retryBox.classList.add('hidden');
+laserBeam.classList.remove('hidden');
+executeScan(lastProcessedBase64);
+} else {
+fileInput.click();
+}
+});
 function getFlag(code) {
 const c = (code || 'EN').toUpperCase();
 if (c === 'EN') return '🇬🇧';
@@ -618,6 +647,7 @@ btnReset.addEventListener('click', resetScanner);
 function resetScanner() {
 resultsPanel.classList.add('hidden');
 scanningState.classList.add('hidden');
+retryBox.classList.add('hidden');
 dropContent.classList.remove('hidden');
 previewWrapper.classList.add('hidden');
 laserBeam.classList.remove('hidden');
@@ -625,6 +655,7 @@ btnShareAll.classList.add('hidden');
 imageDisplay.src = '';
 fileInput.value = '';
 lastScannedCards = [];
+lastProcessedBase64 = null;
 }
 </script>
 </body>
