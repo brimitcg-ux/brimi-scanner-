@@ -47,7 +47,6 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Subtiele gloed achtergrond in Agency stijl */
         .ambient-glow {
             position: fixed;
             top: -120px;
@@ -61,7 +60,6 @@
             z-index: 0;
         }
 
-        /* Agency kaart containers */
         .agency-card {
             background: linear-gradient(180deg, rgba(10, 21, 45, 0.85) 0%, rgba(6, 14, 30, 0.95) 100%);
             border: 1px solid #182744;
@@ -69,7 +67,6 @@
             -webkit-backdrop-filter: blur(14px);
         }
 
-        /* Pill CTA knop in felle mint-stijl */
         .agency-glow-btn {
             background: #00e5b0;
             color: #040812;
@@ -84,7 +81,6 @@
             transform: scale(0.98);
         }
 
-        /* Scanner Viewfinder hoekmarkeringen */
         .vf-corner {
             position: absolute;
             width: 22px;
@@ -102,7 +98,6 @@
             border-color: #00e5b0;
         }
 
-        /* Laser sweep animatie */
         @keyframes laserSweep {
             0% { top: 4%; opacity: 0.9; }
             50% { top: 92%; opacity: 1; }
@@ -124,22 +119,17 @@
 <body class="min-h-full flex flex-col justify-between selection:bg-brand-mint selection:text-black">
     <div class="ambient-glow"></div>
 
-    <!-- Hoofdcontainer -->
     <div class="relative z-10 w-full max-w-xl mx-auto px-4 py-5 sm:py-7 space-y-6">
 
         <!-- Top Navigatie Bar -->
         <header class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <!-- Pokéball Logo Icoon in Agency Kleurstijl -->
+                <!-- Pokéball Logo in Agency kleurstijl -->
                 <div class="w-11 h-11 rounded-2xl bg-brand-surface border border-brand-border flex items-center justify-center shadow-lg relative overflow-hidden group">
                     <svg viewBox="0 0 40 40" class="w-7 h-7" fill="none">
-                        <!-- Bovenste helft (Cyan) -->
                         <path d="M4 20C4 11.1634 11.1634 4 20 4C28.8366 4 36 11.1634 36 20H25.5C25.5 17.5 23.5 15.5 20 15.5C16.5 15.5 14.5 17.5 14.5 20H4Z" fill="url(#cyanGrad)"/>
-                        <!-- Onderste helft (Diepblauw) -->
                         <path d="M4 20C4 28.8366 11.1634 36 20 36C28.8366 36 36 28.8366 36 20H25.5C25.5 22.5 23.5 24.5 20 24.5C16.5 24.5 14.5 22.5 14.5 20H4Z" fill="#0f1e40"/>
-                        <!-- Middenrand -->
                         <line x1="4" y1="20" x2="36" y2="20" stroke="#040812" stroke-width="2.5"/>
-                        <!-- Middenknop (Mint) -->
                         <circle cx="20" cy="20" r="5" fill="#00e5b0" stroke="#040812" stroke-width="2"/>
                         <circle cx="20" cy="20" r="2" fill="#040812"/>
                         <defs>
@@ -160,12 +150,9 @@
                     </p>
                 </div>
             </div>
-
-            <!-- Rechtsboven rustig leeg gelaten conform wens -->
-            <div></div>
         </header>
 
-        <!-- Hero Kop in de Agency stijl -->
+        <!-- Hero Kop -->
         <div class="space-y-2 text-left sm:text-center pt-1">
             <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
                 Scan je kaart.<br class="sm:hidden" />
@@ -176,10 +163,10 @@
             </p>
         </div>
 
-        <!-- Echte native file input gekoppeld aan label: gegarandeerde iOS dropdown actiesheet -->
+        <!-- Echte native file input gekoppeld aan label -->
         <input type="file" id="file-input" accept="image/*" class="sr-only">
 
-        <!-- Scanner Viewfinder Card als <label> voor 100% betrouwbare iOS popup -->
+        <!-- Scanner Viewfinder Card -->
         <div class="w-full">
             <label for="file-input" id="drop-zone" class="agency-card relative block rounded-3xl p-7 sm:p-11 text-center cursor-pointer transition-all duration-300 group hover:border-brand-mint/40 active:scale-[0.99] select-none">
                 
@@ -202,7 +189,6 @@
                         </p>
                     </div>
 
-                    <!-- Pill Action Button in fel Mint -->
                     <span class="agency-glow-btn inline-flex items-center gap-2 font-extrabold px-6 py-3 rounded-full text-xs transition shadow-lg mt-1 pointer-events-none">
                         <span>Foto Maken of Uploaden</span>
                         <i class="fa-solid fa-arrow-right text-[11px]"></i>
@@ -216,7 +202,7 @@
             </label>
         </div>
 
-        <!-- Scanning State Box met dynamische statusindicatie -->
+        <!-- Scanning State Box -->
         <div id="scanning-state" class="hidden agency-card rounded-2xl p-5 border-brand-mint/30 space-y-3">
             <div class="flex items-center justify-between text-xs">
                 <span id="status-title" class="font-extrabold text-brand-mint flex items-center gap-2">
@@ -226,9 +212,8 @@
                 <span class="text-brand-textMuted font-semibold">Live Analyse</span>
             </div>
 
-            <!-- Voortgangsbalk -->
             <div class="w-full bg-[#040812] h-2 rounded-full overflow-hidden border border-brand-border">
-                <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-500 rounded-full" style="width: 25%"></div>
+                <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-500 rounded-full" style="width: 30%"></div>
             </div>
 
             <p id="status-subtitle" class="text-xs text-brand-textMuted font-medium">
@@ -241,12 +226,13 @@
             <div class="flex items-start gap-3">
                 <i class="fa-solid fa-triangle-exclamation text-red-400 text-lg mt-0.5"></i>
                 <div class="space-y-1">
-                    <p class="text-sm font-bold text-white" id="retry-title">Verbinding duurde te lang</p>
-                    <p class="text-xs text-brand-textMuted font-medium" id="retry-desc">
-                        De server was mogelijk in slaapstand. Tik op opnieuw om de analyse direct te hervatten.
+                    <p class="text-sm font-bold text-white" id="retry-title">Verbindingsfout</p>
+                    <p class="text-xs text-brand-textMuted font-medium leading-relaxed" id="retry-desc">
+                        Er kon geen verbinding worden gemaakt met de server.
                     </p>
                 </div>
             </div>
+
             <button id="retry-btn" class="w-full py-2.5 rounded-full bg-brand-surface border border-brand-border hover:border-brand-mint text-xs font-extrabold text-white transition flex items-center justify-center gap-2">
                 <i class="fa-solid fa-rotate-right text-brand-mint"></i>
                 <span>Opnieuw Proberen</span>
@@ -273,12 +259,10 @@
                 </div>
             </div>
 
-            <div id="cards-container" class="space-y-4">
-                <!-- Dynamisch gevuld via JavaScript -->
-            </div>
+            <div id="cards-container" class="space-y-4"></div>
         </div>
 
-        <!-- Waarom BRIMI Scanner? (3 Sterke Verzamelaarsredenen) -->
+        <!-- Waarom BRIMI Scanner? (De 3 Blokken) -->
         <div class="pt-4 space-y-3">
             <div class="space-y-1 px-1">
                 <p class="text-[11px] font-extrabold uppercase tracking-wider text-brand-mint">Waarom BRIMI Scanner?</p>
@@ -286,7 +270,6 @@
             </div>
 
             <div class="grid grid-cols-1 gap-3">
-                <!-- Voordeel 1: Geen urenlang speurwerk -->
                 <div class="agency-card rounded-2xl p-4 sm:p-5 flex items-start gap-4">
                     <div class="w-10 h-10 rounded-xl bg-brand-surface border border-brand-border flex items-center justify-center text-brand-mint text-base shrink-0 mt-0.5">
                         <i class="fa-solid fa-bolt"></i>
@@ -299,7 +282,6 @@
                     </div>
                 </div>
 
-                <!-- Voordeel 2: PriceCharting Slab Koersen -->
                 <div class="agency-card rounded-2xl p-4 sm:p-5 flex items-start gap-4">
                     <div class="w-10 h-10 rounded-xl bg-brand-surface border border-brand-border flex items-center justify-center text-brand-cyan text-base shrink-0 mt-0.5">
                         <i class="fa-solid fa-gem"></i>
@@ -312,7 +294,6 @@
                     </div>
                 </div>
 
-                <!-- Voordeel 3: 1-Tik Community Aanbod -->
                 <div class="agency-card rounded-2xl p-4 sm:p-5 flex items-start gap-4">
                     <div class="w-10 h-10 rounded-xl bg-brand-surface border border-brand-border flex items-center justify-center text-emerald-400 text-base shrink-0 mt-0.5">
                         <i class="fa-brands fa-whatsapp text-lg"></i>
@@ -334,27 +315,9 @@
 
     </div>
 
-    <!-- Feedback Modal voor notificaties -->
-    <div id="notify-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-        <div class="agency-card rounded-3xl p-6 max-w-sm w-full space-y-4 text-center border-brand-border shadow-2xl">
-            <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto text-xl">
-                <i class="fa-solid fa-circle-exclamation"></i>
-            </div>
-            <div class="space-y-1">
-                <h4 class="text-base font-extrabold text-white" id="notify-title">Melding</h4>
-                <p class="text-xs text-brand-textMuted font-medium" id="notify-desc">Er is een fout opgetreden.</p>
-            </div>
-            <button id="notify-close" class="w-full py-3 rounded-full bg-white text-black font-extrabold text-xs transition active:scale-95">
-                Begrepen
-            </button>
-        </div>
-    </div>
-
     <script>
-        // API Endpoint naar Render Backend
         const API_BASE = "https://brimi-cardmarket-api.onrender.com";
 
-        // Element Referenties
         const fileInput = document.getElementById('file-input');
         const dropZone = document.getElementById('drop-zone');
         const dropContent = document.getElementById('drop-content');
@@ -367,38 +330,26 @@
         const progressBar = document.getElementById('progress-bar');
         const retryBox = document.getElementById('retry-box');
         const retryBtn = document.getElementById('retry-btn');
+        const retryTitle = document.getElementById('retry-title');
+        const retryDesc = document.getElementById('retry-desc');
         const resultsPanel = document.getElementById('results-panel');
         const cardsContainer = document.getElementById('cards-container');
         const cardCounter = document.getElementById('card-counter');
         const bulkWhatsappBtn = document.getElementById('bulk-whatsapp-btn');
         const resetBtn = document.getElementById('reset-btn');
-        const notifyModal = document.getElementById('notify-modal');
-        const notifyTitle = document.getElementById('notify-title');
-        const notifyDesc = document.getElementById('notify-desc');
-        const notifyClose = document.getElementById('notify-close');
 
         let currentCards = [];
         let lastProcessedBase64 = null;
 
-        // 1. Stille voorverwarming (Pre-warm ping) bij laden
+        // Stil voorverwarmen bij openen van pagina
         window.addEventListener('DOMContentLoaded', () => {
             fetch(`${API_BASE}/`, { method: 'GET', mode: 'cors' }).catch(() => {});
         });
 
-        function showNotification(title, message) {
-            notifyTitle.textContent = title;
-            notifyDesc.textContent = message;
-            notifyModal.classList.remove('hidden');
-        }
-        notifyClose.addEventListener('click', () => notifyModal.classList.add('hidden'));
-
-        // Native label trigger handelt de klik automatisch af voor iOS Safari.
-        // We luisteren op het change-event van de file input:
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files && e.target.files[0];
             if (!file) return;
 
-            // Direct visuele feedback in de interface
             dropContent.classList.add('hidden');
             previewWrapper.classList.remove('hidden');
             laserBeam.classList.remove('hidden');
@@ -407,8 +358,8 @@
             retryBox.classList.add('hidden');
 
             statusTitle.textContent = "Foto laden...";
-            statusSubtitle.textContent = "Afbeelding optimaliseren voor snelle verwerking...";
-            progressBar.style.width = "20%";
+            statusSubtitle.textContent = "Afbeelding optimaliseren...";
+            progressBar.style.width = "25%";
 
             const reader = new FileReader();
 
@@ -453,45 +404,41 @@
                 img.src = evt.target.result;
             };
 
-            reader.onerror = () => {
-                showNotification("Inleesfout", "Kon het gekozen bestand niet inlezen. Probeer het opnieuw.");
-                resetScanner();
-            };
-
             reader.readAsDataURL(file);
             fileInput.value = '';
         });
 
-        // Scan uitvoeren naar de Render Backend
         async function executeScan(base64Data) {
             statusTitle.textContent = "Kaart identificeren...";
-            statusSubtitle.textContent = "Leest serie, setnummer en herkent conditie...";
-            progressBar.style.width = "40%";
+            statusSubtitle.textContent = "Leest serie, nummer en grader-label...";
+            progressBar.style.width = "50%";
 
             const progressTimer = setTimeout(() => {
-                statusTitle.textContent = "Koersen ophalen...";
-                statusSubtitle.textContent = "Cardmarket NL en PriceCharting veilingdata raadplegen...";
-                progressBar.style.width = "75%";
-            }, 1800);
+                statusTitle.textContent = "Prijzen controleren...";
+                statusSubtitle.textContent = "Cardmarket NL & PriceCharting koersen raadplegen...";
+                progressBar.style.width = "80%";
+            }, 1500);
 
             try {
-                // Verruim time-out naar 65s voor koude starts van Render
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 65000);
-
                 const response = await fetch(`${API_BASE}/api/scan`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_base64: base64Data }),
-                    signal: controller.signal
+                    body: JSON.stringify({ 
+                        image_base64: base64Data,
+                        mime_type: "image/jpeg"
+                    })
                 });
 
-                clearTimeout(timeoutId);
                 clearTimeout(progressTimer);
 
                 if (!response.ok) {
-                    const errJson = await response.json().catch(() => ({}));
-                    throw new Error(errJson.detail || `Server fout (HTTP ${response.status})`);
+                    const errText = await response.text();
+                    let errMsg = `Server status ${response.status}`;
+                    try {
+                        const parsed = JSON.parse(errText);
+                        errMsg = parsed.detail || errMsg;
+                    } catch(e) {}
+                    throw new Error(errMsg);
                 }
 
                 const data = await response.json();
@@ -508,24 +455,14 @@
                 scanningState.classList.add('hidden');
                 laserBeam.classList.add('hidden');
 
-                const isNetworkOrColdStart = 
-                    error.name === 'AbortError' || 
-                    error.message === 'Load failed' || 
-                    error.message.includes('fetch') || 
-                    error.message.includes('NetworkError');
-
-                if (isNetworkOrColdStart) {
-                    document.getElementById('retry-title').textContent = "Server werd opgestart";
-                    document.getElementById('retry-desc').textContent = "Render was in slaapstand en is nu wakker. Tik direct op 'Opnieuw Proberen' om de scan binnen 2 seconden te voltooien!";
-                } else {
-                    document.getElementById('retry-title').textContent = "Scan Probleem";
-                    document.getElementById('retry-desc').textContent = error.message;
-                }
+                retryTitle.textContent = "Scan Kon Niet Voltooid Worden";
+                retryDesc.textContent = error.message.includes('fetch') || error.message === 'Load failed'
+                    ? "Render was waarschijnlijk nog bezig met opstarten. Tik nu op 'Opnieuw Proberen' om direct te scannen!"
+                    : error.message;
                 retryBox.classList.remove('hidden');
             }
         }
 
-        // Opnieuw proberen knop
         retryBtn.addEventListener('click', () => {
             if (lastProcessedBase64) {
                 retryBox.classList.add('hidden');
@@ -535,10 +472,9 @@
             }
         });
 
-        // Resultaten renderen
         function renderResults(cards) {
             if (!Array.isArray(cards) || cards.length === 0) {
-                showNotification("Geen kaart herkend", "Zorg dat de kaart duidelijk en goed verlicht in beeld is en probeer het opnieuw.");
+                alert("Geen kaart herkend. Zorg dat de kaart goed verlicht in beeld ligt.");
                 resetScanner();
                 return;
             }
@@ -564,12 +500,7 @@
             }));
 
             cardCounter.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${currentCards.length} KAART${currentCards.length > 1 ? 'EN' : ''} GEVONDEN`;
-
-            if (currentCards.length > 1) {
-                bulkWhatsappBtn.classList.remove('hidden');
-            } else {
-                bulkWhatsappBtn.classList.add('hidden');
-            }
+            bulkWhatsappBtn.classList.toggle('hidden', currentCards.length <= 1);
 
             cardsContainer.innerHTML = '';
             currentCards.forEach(renderSingleCard);
@@ -639,7 +570,6 @@
             const marketBtnText = card.isGraded ? 'Check PriceCharting Koers' : 'Check Cardmarket NL';
 
             cardEl.innerHTML = `
-                <!-- Bovenste rij: Badges & Prijs -->
                 <div class="flex items-start justify-between gap-3">
                     <div class="space-y-1">
                         <div class="flex flex-wrap items-center gap-1.5">
@@ -662,7 +592,6 @@
                         </p>
                     </div>
 
-                    <!-- Prijs Badge (Klikbaar om aan te passen) -->
                     <div class="text-right shrink-0">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-brand-textMuted">
                             ${card.isGraded ? 'Slab Koers' : 'Richtprijs'}
@@ -676,10 +605,8 @@
                     </div>
                 </div>
 
-                <!-- Conditie selector / Slab info -->
                 ${conditionHTML}
 
-                <!-- Knoppen: Marktcheck & WhatsApp Community -->
                 <div class="space-y-2 pt-1">
                     <a href="${card.marketUrl}" target="_blank" rel="noopener noreferrer" class="w-full py-2.5 rounded-full bg-brand-surface border border-brand-border hover:border-brand-cyan/50 text-white font-extrabold text-xs transition flex items-center justify-center gap-2">
                         <i class="fa-solid ${marketBtnIcon} text-brand-cyan"></i>
@@ -696,7 +623,6 @@
             cardsContainer.appendChild(cardEl);
         }
 
-        // Conditie aanpassen en prijs direct herberekenen
         window.setCondition = function(cardId, conditionName, factor) {
             const card = currentCards.find(c => c.id === cardId);
             if (!card) return;
@@ -721,7 +647,6 @@
             });
         };
 
-        // Handmatig prijs aanpassen
         window.editCardPrice = function(cardId) {
             const card = currentCards.find(c => c.id === cardId);
             if (!card) return;
@@ -737,7 +662,6 @@
             }
         };
 
-        // WhatsApp Community Bericht (Exact volgens jouw gewenste standaard, zonder url links)
         window.shareWhatsAppSingle = function(cardId) {
             const card = currentCards.find(c => c.id === cardId);
             if (!card) return;
@@ -762,11 +686,10 @@ Stuur gerust een berichtje bij interesse! 🤝`;
             openWhatsApp(text);
         };
 
-        // Meerdere kaarten aanbieden in één uniform bericht
         bulkWhatsappBtn.addEventListener('click', () => {
             if (currentCards.length === 0) return;
 
-            let cardList = currentCards.map((c, i) => {
+            let cardList = currentCards.map((c) => {
                 const flag = getFlag(c.languageCode);
                 const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${c.number}`;
                 const setCodeLabel = c.setCode ? `${c.setCode} ` : '';
@@ -787,7 +710,6 @@ Stuur gerust een berichtje bij interesse! 🤝`;
 
         function openWhatsApp(message) {
             const encoded = encodeURIComponent(message);
-            // Eerst proberen direct de WhatsApp app te openen, anders web link
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             if (isMobile) {
                 window.location.href = `whatsapp://send?text=${encoded}`;
@@ -799,7 +721,6 @@ Stuur gerust een berichtje bij interesse! 🤝`;
             }
         }
 
-        // Reset Scanner
         function resetScanner() {
             dropContent.classList.remove('hidden');
             previewWrapper.classList.add('hidden');
