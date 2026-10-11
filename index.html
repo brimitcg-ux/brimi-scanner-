@@ -97,31 +97,29 @@ background: linear-gradient(90deg, transparent 5%, #00c8ff 20%, #00e5b0 50%, #00
 box-shadow: 0 0 16px #00e5b0, 0 0 32px #00c8ff;
 animation: laser-sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
-.logo-ribbon {
-position: relative;
-width: 32px;
-height: 32px;
-display: flex;
-align-items: center;
-justify-content: center;
-}
 </style>
 </head>
 <body class="font-sans antialiased flex flex-col justify-between selection:bg-brand-mint selection:text-brand-bg pb-12">
-<!-- Header in de minimalistische agency-stijl -->
+<!-- Header in de minimalistische agency-stijl zonder groene stippen -->
 <header class="border-b border-brand-border/60 bg-brand-bg/90 backdrop-blur-xl sticky top-0 z-40">
 <div class="max-w-2xl mx-auto px-5 py-3.5 flex justify-between items-center">
 <div class="flex items-center gap-3">
-<!-- Geometrisch logo-icoon geïnspireerd op de agency huisstijl -->
+<!-- TCG Kaart Icon met Agency Gradient -->
 <div class="w-9 h-9 rounded-xl agency-logo-gradient p-[1.5px] shadow-lg flex items-center justify-center">
 <div class="w-full h-full bg-brand-bg rounded-[10px] flex items-center justify-center">
-<svg class="w-5 h-5 text-brand-mint" viewBox="0 0 24 24" fill="none">
-<path d="M4 7L12 3L20 7V17L12 21L4 17V7Z" stroke="url(#agency_grad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M12 8L16 12L12 16" stroke="#00e5b0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+<!-- Achterste kaart schuin -->
+<rect x="7" y="2.5" width="12" height="16" rx="2" stroke="#1e5bff" stroke-width="1.8" transform="rotate(8 13 10.5)" />
+<!-- Voorste kaart recht -->
+<rect x="4" y="4" width="12.5" height="16.5" rx="2" stroke="url(#tcg_grad)" stroke-width="2" fill="#0b1324"/>
+<!-- Kaart illustratievak -->
+<rect x="6" y="6" width="8.5" height="6.5" rx="1" stroke="#00c8ff" stroke-width="1.2" opacity="0.85"/>
+<!-- Tekstregeltjes op kaart -->
+<path d="M6 14.5H13" stroke="#00e5b0" stroke-width="1.4" stroke-linecap="round"/>
+<path d="M6 17H10.5" stroke="#7f93b0" stroke-width="1.2" stroke-linecap="round"/>
 <defs>
-<linearGradient id="agency_grad" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
-<stop stop-color="#1e5bff"/>
-<stop offset="0.5" stop-color="#00c8ff"/>
+<linearGradient id="tcg_grad" x1="4" y1="4" x2="16.5" y2="20.5" gradientUnits="userSpaceOnUse">
+<stop stop-color="#00c8ff"/>
 <stop offset="1" stop-color="#00e5b0"/>
 </linearGradient>
 </defs>
@@ -129,24 +127,20 @@ justify-content: center;
 </div>
 </div>
 <div class="flex flex-col">
-<div class="flex items-center gap-1.5">
-<span class="text-lg font-black tracking-tight text-white">BRIMI</span>
-<span class="w-1.5 h-1.5 rounded-full bg-brand-mint"></span>
-</div>
+<span class="text-lg font-black tracking-tight text-white leading-tight">BRIMI</span>
 <span class="text-[10px] font-semibold text-brand-textMuted tracking-normal">
 Nederlandse PKMN prijzen checker
 </span>
 </div>
 </div>
-<!-- Clean rechtsboven status-tag -->
-<div class="flex items-center gap-2">
-<span class="text-[11px] font-bold text-brand-textMuted hidden sm:inline">LIVE ENGINE</span>
-<span class="w-2 h-2 rounded-full bg-brand-mint animate-pulse"></span>
+<!-- Clean rechtsboven zonder groen pulserend bolletje -->
+<div class="flex items-center">
+<span class="text-[11px] font-bold text-brand-textMuted tracking-wider uppercase">SCAN ENGINE</span>
 </div>
 </div>
 </header>
 <main class="max-w-2xl mx-auto w-full px-5 py-8 flex-grow flex flex-col gap-7">
-<!-- Hero Kop in de kenmerkende typografische agency-stijl -->
+<!-- Hero Kop in de typografische agency-stijl -->
 <div class="space-y-2 text-left sm:text-center">
 <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
 Scan je kaart.<br class="sm:hidden" />
@@ -156,10 +150,11 @@ Scan je kaart.<br class="sm:hidden" />
 Cardmarket NL voor losse kaarten en PriceCharting veilingkoersen voor gecertificeerde slabs.
 </p>
 </div>
+<!-- Verborgen File Input (Veilig buiten de label geplaatst voor iOS Safari compatibiliteit) -->
+<input type="file" id="file-input" class="hidden" accept="image/*">
 <!-- Scanner Viewfinder Card -->
 <div class="w-full">
 <label for="file-input" id="drop-zone" class="agency-card relative block rounded-3xl p-7 sm:p-11 text-center cursor-pointer transition-all duration-300 group hover:border-brand-mint/40 active:scale-[0.99]">
-<input type="file" id="file-input" class="hidden" accept="image/*">
 <div class="vf-corner vf-tl"></div>
 <div class="vf-corner vf-tr"></div>
 <div class="vf-corner vf-bl"></div>
@@ -176,7 +171,7 @@ Maak een foto of kies uit bibliotheek
 Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
 </p>
 </div>
-<!-- Kenmerkende Pill Action Button in fel Mint/Cyan -->
+<!-- Pill Action Button in fel Mint -->
 <span class="agency-glow-btn inline-flex items-center gap-2 font-extrabold px-6 py-3 rounded-full text-xs transition shadow-lg mt-1">
 <span>Foto Maken of Uploaden</span>
 <i class="fa-solid fa-arrow-right text-[11px]"></i>
@@ -196,7 +191,7 @@ Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
 </div>
 <p id="status-subtitle" class="text-[11px] text-brand-textMuted">Leest serie, nummer en checkt actuele koersen...</p>
 <div class="w-full bg-brand-bg rounded-full h-1.5 overflow-hidden border border-brand-border">
-<div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-300 rounded-full" style="width: 40%"></div>
+<div id="progress-bar" class="h-full bg-gradient-to-r from-brand-cyan to-brand-mint transition-all duration-300 rounded-full" style="width: 25%"></div>
 </div>
 </div>
 <!-- Results Panel -->
@@ -217,7 +212,7 @@ Herkent singles, toploaders en graded slabs (PSA / CGC / BGS)
 </div>
 <div id="cards-container" class="space-y-4"></div>
 </div>
-<!-- Onderste 3 Voordelenblokken in de agency-stijl (zoals in image 12) -->
+<!-- Onderste 3 Voordelenblokken in de agency-stijl -->
 <div class="pt-6 border-t border-brand-border/60 space-y-4">
 <div class="space-y-1">
 <p class="text-[11px] font-bold uppercase tracking-widest text-brand-mint">Waarom BRIMI Scanner?</p>
@@ -295,7 +290,7 @@ Begrepen
 </div>
 <script>
 const BACKEND_URL = "https://brimi-scanner.onrender.com";
-// Pre-warm ping naar Render
+// Pre-warm ping naar Render server bij het inladen
 window.addEventListener('DOMContentLoaded', () => {
 fetch(⁠${BACKEND_URL}/⁠).catch(() => {});
 });
@@ -348,21 +343,27 @@ notifyDesc.textContent = message;
 notifyModal.classList.remove('hidden');
 }
 notifyClose.addEventListener('click', () => notifyModal.classList.add('hidden'));
+// Robuuste afhandeling van foto-selectie (zowel camera als bibliotheek)
 fileInput.addEventListener('change', (e) => {
-if (e.target.files && e.target.files.length > 0) {
-const file = e.target.files[0];
-if (!file.type.startsWith('image/')) {
-showNotification('Ongeldig bestand', 'Selecteer een duidelijke foto van je Pokémon kaart(en).');
-return;
-}
-const reader = new FileReader();
-reader.onload = (evt) => {
+const file = e.target.files && e.target.files[0];
+if (!file) return;
+// Toon direct preview en laadstatus
+dropContent.classList.add('hidden');
+previewWrapper.classList.remove('hidden');
+laserBeam.classList.remove('hidden');
+scanningState.classList.remove('hidden');
+resultsPanel.classList.add('hidden');
+statusTitle.textContent = "Foto laden...";
+statusSubtitle.textContent = "Optimaliseert resolutie voor snelle herkenning...";
+progressBar.style.width = "25%";
+const objectUrl = URL.createObjectURL(file);
 const img = new Image();
 img.onload = () => {
+URL.revokeObjectURL(objectUrl);
 const canvas = document.createElement('canvas');
 let w = img.width;
 let h = img.height;
-const maxDim = 850;
+const maxDim = 900;
 if (w > maxDim || h > maxDim) {
 if (w > h) {
 h = Math.round((h * maxDim) / w);
@@ -376,28 +377,49 @@ canvas.width = w;
 canvas.height = h;
 const ctx = canvas.getContext('2d');
 ctx.drawImage(img, 0, 0, w, h);
-const compressed = canvas.toDataURL('image/jpeg', 0.82);
+const compressed = canvas.toDataURL('image/jpeg', 0.85);
 imageDisplay.src = compressed;
 const base64Data = compressed.split(',')[1];
-dropContent.classList.add('hidden');
-previewWrapper.classList.remove('hidden');
-laserBeam.classList.remove('hidden');
 executeScan(base64Data);
 };
-img.src = evt.target.result;
+img.onerror = () => {
+URL.revokeObjectURL(objectUrl);
+// Fallback via FileReader indien objectURL niet laadt
+const reader = new FileReader();
+reader.onload = (evt) => {
+const fallbackImg = new Image();
+fallbackImg.onload = () => {
+const canvas = document.createElement('canvas');
+let w = fallbackImg.width;
+let h = fallbackImg.height;
+const maxDim = 900;
+if (w > maxDim || h > maxDim) {
+if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+else { w = Math.round((w * maxDim) / h); h = maxDim; }
+}
+canvas.width = w;
+canvas.height = h;
+const ctx = canvas.getContext('2d');
+ctx.drawImage(fallbackImg, 0, 0, w, h);
+const compressed = canvas.toDataURL('image/jpeg', 0.85);
+imageDisplay.src = compressed;
+executeScan(compressed.split(',')[1]);
+};
+fallbackImg.src = evt.target.result;
 };
 reader.readAsDataURL(file);
-}
+};
+img.src = objectUrl;
 });
 async function executeScan(base64Data) {
 scanningState.classList.remove('hidden');
 resultsPanel.classList.add('hidden');
 cardsContainer.innerHTML = '';
-statusTitle.textContent = "Analyseren...";
+statusTitle.textContent = "Kaart analyseren...";
 statusSubtitle.textContent = "Leest serie, nummer en checkt actuele koersen...";
-progressBar.style.width = "40%";
+progressBar.style.width = "50%";
 try {
-setTimeout(() => { progressBar.style.width = "80%"; }, 900);
+setTimeout(() => { progressBar.style.width = "85%"; }, 800);
 const response = await fetch(⁠${BACKEND_URL}/api/scan⁠, {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
@@ -497,7 +519,7 @@ cardBox.innerHTML = ⁠<div class="flex items-start justify-between gap-3"> <div
 ` : ''}
 </div>
 <h2 class="text-2xl font-black text-white tracking-tight">￼
-<p class="text-xs text-brand-textMuted font-medium">{card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
+￼{card.setName || 'Reeks'} • ${card.rarity || 'Kaart'}</p>
 </div>
 <div class="text-right shrink-0">
 <span class="text-[10px] text-brand-textMuted uppercase font-extrabold tracking-wider block">
@@ -546,6 +568,7 @@ priceModal.classList.add('hidden');
 triggerHaptic();
 }
 });
+// WhatsApp Community-bericht opmaak (zonder externe links)
 window.shareCardToWhatsApp = function(idx) {
 const c = lastScannedCards[idx];
 if (!c) return;
