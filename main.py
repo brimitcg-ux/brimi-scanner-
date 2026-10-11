@@ -2,48 +2,24 @@ import os
 import json
 import re
 import urllib.parse
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Scanner Engine", version="8.1.0")
+app = FastAPI(title="BRIMI Scanner Engine", version="8.2.0")
 
-# CORS middleware configuratie
+# Enkelvoudige, officiële CORS middleware (geen conflicterende dubbele headers)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
-
-# Garandeer dat preflights (OPTIONS) en fouten ALTIJD correct beantwoord worden met CORS headers
-@app.middleware("http")
-async def cors_handler_middleware(request: Request, call_next):
-    if request.method == "OPTIONS":
-        return Response(
-            status_code=204,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            },
-        )
-    try:
-        response = await call_next(request)
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        return response
-    except Exception as exc:
-        return JSONResponse(
-            status_code=500,
-            content={"detail": f"Interne serverfout: {str(exc)}"},
-            headers={"Access-Control-Allow-Origin": "*"}
-        )
 
 class ScanRequest(BaseModel):
     image_base64: str
@@ -75,23 +51,22 @@ async def scan_cards(payload: ScanRequest):
     if not key:
         return JSONResponse(
             status_code=500,
-            content={"detail": "GEMINI_API_KEY ontbreekt in Render Environment Variables."},
-            headers={"Access-Control-Allow-Origin": "*"}
+            content={"detail": "GEMINI_API_KEY ontbreekt in Render Environment Variables."}
         )
 
-    # Sanitize base64 payload
+    # Sanitizeer base64 invoer
     clean_b64 = payload.image_base64
     if "," in clean_b64:
         clean_b64 = clean_b64.split(",", 1)[1]
     clean_b64 = clean_b64.replace("\n", "").replace("\r", "").strip()
 
     prompt = """
-Analyseer de Pokémon kaart op deze afbeelding:
-1. Naam: Officiële Pokémon naam (bijv. Palafin, Naganadel GX, Charizard, Mewtwo).
-2. Nummer: Cijfers vóór de schuine streep (bijv. '062' of '230').
-3. Totaal: Cijfers na de schuine streep (bijv. '091' of '236').
-4. Setcode: Letters/code linksonder (bijv. PAF, SV06, SM11).
-5. Setnaam: Reeksnaam (bijv. Paldean Fates, Twilight Masquerade, Unified Minds).
+Analyseer de Pokémon kaart op deze afbeelding zorgvuldig:
+1. Naam: Officiële Pokémon kaartnaam (bijv. Naganadel GX, Palafin, Charizard ex).
+2. Nummer: Cijfers vóór de schuine streep (bijv. '230' of '062').
+3. Totaal: Cijfers na de schuine streep (bijv. '236' of '091').
+4. Setcode: Letters/code linksonder (bijv. SM11, PAF, SV06).
+5. Setnaam: Officiële set (bijv. Unified Minds, Paldean Fates).
 6. Taal: Engels ('EN'), Japans ('JP') of Chinees ('CN').
 7. Graded Slab herkenning:
    - isGraded: true als de kaart in een gecertificeerde slab zit (PSA, CGC, BGS), anders false.
@@ -100,24 +75,25 @@ Analyseer de Pokémon kaart op deze afbeelding:
    - condition: Bij slab bijv. "PSA 9 Mint". Bij ongegradeerd: "Near Mint (NM)".
 8. Reële Marktwaarde in euro:
    - Voor ongegradeerde kaarten: Cardmarket NL richtprijs (Near Mint).
-   - Voor graded slabs: PriceCharting veilingwaarde voor DEZE SPECIFIEKE GRADE (voor bijv. Naganadel GX PSA 9 ca. € 14.80, PSA 10 ca. € 115).
+   - Voor graded slabs: PriceCharting actuele veilingkoers voor DEZE SPECIFIEKE GRADE.
+     BELANGRIJK: Een PSA 9 van een moderne ultra/secret rare zoals Naganadel GX #230 ligt historisch rond $15.50 - $16.50 (€ 14.50 - € 15.50), NIET € 35. Een PSA 10 ligt rond $125 (€ 115). Geef een accuraat getal passend bij de specifieke grade!
 
 Output UITSLUITEND een geldige JSON array:
 [
   {
-    "cardName": "Palafin",
-    "cardNumber": "062",
-    "setTotal": "091",
-    "setCode": "PAF",
-    "setName": "Paldean Fates",
+    "cardName": "Naganadel GX",
+    "cardNumber": "230",
+    "setTotal": "236",
+    "setCode": "SM11",
+    "setName": "Unified Minds",
     "language": "Engels",
     "languageCode": "EN",
-    "rarity": "Illustration Rare",
-    "isGraded": false,
-    "gradingCompany": null,
-    "grade": null,
-    "condition": "Near Mint (NM)",
-    "marketEstimateEUR": 4.50
+    "rarity": "Secret Rare",
+    "isGraded": true,
+    "gradingCompany": "PSA",
+    "grade": "9",
+    "condition": "PSA 9 Mint",
+    "marketEstimateEUR": 14.80
   }
 ]
 """
@@ -142,8 +118,8 @@ Output UITSLUITEND een geldige JSON array:
         }
     }
 
-    # Modellen proberen met automatische fallback
-    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    # Officiële werkende modellen
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
     raw_text = ""
     last_error = ""
 
@@ -167,8 +143,7 @@ Output UITSLUITEND een geldige JSON array:
     if not raw_text:
         return JSONResponse(
             status_code=502,
-            content={"detail": f"Geen analyse ontvangen van de engine ({last_error})."},
-            headers={"Access-Control-Allow-Origin": "*"}
+            content={"detail": f"Analyse mislukt ({last_error})."}
         )
 
     cleaned = raw_text.strip()
@@ -187,8 +162,7 @@ Output UITSLUITEND een geldige JSON array:
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"detail": f"Analyse-fout bij verwerken data: {str(e)}"},
-            headers={"Access-Control-Allow-Origin": "*"}
+            content={"detail": f"Fout bij verwerken data: {str(e)}"}
         )
 
     results = []
@@ -224,7 +198,4 @@ Output UITSLUITEND een geldige JSON array:
             "priceSource": price_source
         })
 
-    return JSONResponse(
-        content=results,
-        headers={"Access-Control-Allow-Origin": "*"}
-    )
+    return JSONResponse(content=results)
