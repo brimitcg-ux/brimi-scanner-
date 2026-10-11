@@ -5,30 +5,45 @@ import urllib.parse
 from typing import Optional, List, Dict, Any
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Scanner Engine", version="8.0.0")
+app = FastAPI(title="BRIMI Scanner Engine", version="8.1.0")
 
-# Volledige CORS-toestemming voor alle origins (voorkomt Safari 'Load failed')
+# CORS middleware configuratie
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-# Garandeer dat CORS-headers ALTIJD worden meegestuurd, ook bij uitzonderingen
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Serverfout: {str(exc)}"},
-        headers={"Access-Control-Allow-Origin": "*"}
-    )
+# Garandeer dat preflights (OPTIONS) en fouten ALTIJD correct beantwoord worden met CORS headers
+@app.middleware("http")
+async def cors_handler_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    try:
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Interne serverfout: {str(exc)}"},
+            headers={"Access-Control-Allow-Origin": "*"}
+        )
 
 class ScanRequest(BaseModel):
     image_base64: str
@@ -64,39 +79,45 @@ async def scan_cards(payload: ScanRequest):
             headers={"Access-Control-Allow-Origin": "*"}
         )
 
+    # Sanitize base64 payload
+    clean_b64 = payload.image_base64
+    if "," in clean_b64:
+        clean_b64 = clean_b64.split(",", 1)[1]
+    clean_b64 = clean_b64.replace("\n", "").replace("\r", "").strip()
+
     prompt = """
 Analyseer de Pokémon kaart op deze afbeelding:
-1. Naam: Officiële Pokémon naam (bijv. Naganadel GX, Charizard, Mewtwo).
-2. Nummer: Cijfers vóór de schuine streep (bijv. '230' uit '230/236').
-3. Totaal: Cijfers na de schuine streep (bijv. '236').
-4. Setcode: Letters linksonder (bijv. SM11, SWSH, ME05).
-5. Setnaam: Reeksnaam (bijv. Unified Minds).
+1. Naam: Officiële Pokémon naam (bijv. Palafin, Naganadel GX, Charizard, Mewtwo).
+2. Nummer: Cijfers vóór de schuine streep (bijv. '062' of '230').
+3. Totaal: Cijfers na de schuine streep (bijv. '091' of '236').
+4. Setcode: Letters/code linksonder (bijv. PAF, SV06, SM11).
+5. Setnaam: Reeksnaam (bijv. Paldean Fates, Twilight Masquerade, Unified Minds).
 6. Taal: Engels ('EN'), Japans ('JP') of Chinees ('CN').
 7. Graded Slab herkenning:
-   - isGraded: true als de kaart in een gecertificeerde slab zit (PSA, CGC, BGS, PCA), anders false.
+   - isGraded: true als de kaart in een gecertificeerde slab zit (PSA, CGC, BGS), anders false.
    - gradingCompany: "PSA", "BGS", "CGC" of null.
-   - grade: Het cijfer op het label (bijv. "10", "9.5", "9", "8") of null.
+   - grade: Cijfer op het label (bijv. "10", "9.5", "9") of null.
    - condition: Bij slab bijv. "PSA 9 Mint". Bij ongegradeerd: "Near Mint (NM)".
 8. Reële Marktwaarde in euro:
-   - Voor ongegradeerde kaarten: Cardmarket NL richtprijs.
-   - Voor graded slabs: PriceCharting veilingwaarde voor DEZE SPECIFIEKE GRADE (voor bijv. Naganadel GX PSA 9 is dit ca. € 14.80, NIET € 35+).
+   - Voor ongegradeerde kaarten: Cardmarket NL richtprijs (Near Mint).
+   - Voor graded slabs: PriceCharting veilingwaarde voor DEZE SPECIFIEKE GRADE (voor bijv. Naganadel GX PSA 9 ca. € 14.80, PSA 10 ca. € 115).
 
 Output UITSLUITEND een geldige JSON array:
 [
   {
-    "cardName": "Naganadel GX",
-    "cardNumber": "230",
-    "setTotal": "236",
-    "setCode": "SM11",
-    "setName": "Unified Minds",
+    "cardName": "Palafin",
+    "cardNumber": "062",
+    "setTotal": "091",
+    "setCode": "PAF",
+    "setName": "Paldean Fates",
     "language": "Engels",
     "languageCode": "EN",
-    "rarity": "Secret Rare",
-    "isGraded": true,
-    "gradingCompany": "PSA",
-    "grade": "9",
-    "condition": "PSA 9 Mint",
-    "marketEstimateEUR": 14.80
+    "rarity": "Illustration Rare",
+    "isGraded": false,
+    "gradingCompany": null,
+    "grade": null,
+    "condition": "Near Mint (NM)",
+    "marketEstimateEUR": 4.50
   }
 ]
 """
@@ -109,7 +130,7 @@ Output UITSLUITEND een geldige JSON array:
                 {
                     "inlineData": {
                         "mimeType": payload.mime_type or "image/jpeg",
-                        "data": payload.image_base64
+                        "data": clean_b64
                     }
                 }
             ]
@@ -121,37 +142,32 @@ Output UITSLUITEND een geldige JSON array:
         }
     }
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
-    fallback_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
-
+    # Modellen proberen met automatische fallback
+    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     raw_text = ""
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        try:
-            res = await client.post(url, json=gemini_body)
-            if res.status_code == 200:
-                cands = res.json().get("candidates", [])
-                if cands:
-                    parts = cands[0].get("content", {}).get("parts", [])
-                    raw_text = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
-            
-            if not raw_text:
-                res = await client.post(fallback_url, json=gemini_body)
+    last_error = ""
+
+    async with httpx.AsyncClient(timeout=25.0) as client:
+        for model_name in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+            try:
+                res = await client.post(url, json=gemini_body)
                 if res.status_code == 200:
                     cands = res.json().get("candidates", [])
                     if cands:
                         parts = cands[0].get("content", {}).get("parts", [])
                         raw_text = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
-        except Exception as e:
-            return JSONResponse(
-                status_code=500,
-                content={"detail": f"Verbindingsfout naar AI: {str(e)}"},
-                headers={"Access-Control-Allow-Origin": "*"}
-            )
+                        if raw_text:
+                            break
+                else:
+                    last_error = f"{model_name} HTTP {res.status_code}"
+            except Exception as e:
+                last_error = str(e)
 
     if not raw_text:
         return JSONResponse(
             status_code=502,
-            content={"detail": "Geen reactie ontvangen van de scan engine."},
+            content={"detail": f"Geen analyse ontvangen van de engine ({last_error})."},
             headers={"Access-Control-Allow-Origin": "*"}
         )
 
@@ -168,10 +184,10 @@ Output UITSLUITEND een geldige JSON array:
         cards_data = json.loads(cleaned)
         if not isinstance(cards_data, list):
             cards_data = [cards_data]
-    except Exception:
+    except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"detail": "Ongeldige JSON van analyse-engine."},
+            content={"detail": f"Analyse-fout bij verwerken data: {str(e)}"},
             headers={"Access-Control-Allow-Origin": "*"}
         )
 
@@ -180,7 +196,7 @@ Output UITSLUITEND een geldige JSON array:
         is_graded = bool(c.get("isGraded") or c.get("gradingCompany"))
         card_name = c.get("cardName", "Pokémon Kaart")
         card_num = str(c.get("cardNumber", ""))
-        price_val = float(c.get("marketEstimateEUR") or 5.0)
+        price_val = float(c.get("marketEstimateEUR") or 4.0)
 
         if is_graded:
             target_url = get_pricecharting_url(card_name, card_num)
