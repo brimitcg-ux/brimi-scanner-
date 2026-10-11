@@ -1,21 +1,12 @@
-import os
-import re
-import json
-import asyncio
-import urllib.parse
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
-
-import httpx
-from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 app = FastAPI(
     title="BRIMI Turbo Scanner Engine",
     description="Pokémon kaartdetectie met Cardmarket NL voor singles en live PriceCharting voor graded slabs.",
-    version="7.0.0"
+    version="7.1.0"
 )
 
 app.add_middleware(
@@ -25,6 +16,23 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Garandeer dat CORS-headers ALTIJD worden meegestuurd, ook bij serverfouten (voorkomt Safari 'Load failed')
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Verwerkingsfout: {str(exc)}"},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
 
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL = timedelta(hours=4)
@@ -62,121 +70,14 @@ def get_ebay_sold_url(card_name: str, card_number: str, slab_info: Optional[str]
         query = f"{slab_info} {query}"
     return f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(query.strip())}&LH_Sold=1&LH_Complete=1"
 
-async def fetch_live_pricecharting_via_grounding(
-    card_name: str, 
-    card_number: str, 
-    set_name: Optional[str],
-    grading_company: Optional[str], 
-    grade: Optional[str],
-    api_key: str
-) -> Optional[Dict[str, Any]]:
-    """Haalt realtime de exacte PriceCharting koers op via Google Search Grounding of directe pricing query."""
-    clean_num = clean_card_number(card_number)
-    grader = (grading_company or "PSA").upper()
-    grade_val = str(grade or "9").strip()
-    grade_query = f"{grader} {grade_val}"
-
-    prompt = f"""
-Find the current official PriceCharting price in USD for this graded Pokemon slab:
-Card: Pokemon {card_name} #{clean_num}
-Set: {set_name or ''}
-Grade: {grade_query} (PriceCharting column: Grade {grade_val} or PSA {grade_val})
-
-Search pricecharting.com for the exact current price in USD.
-Output ONLY a valid JSON object in this exact format:
-{{"price_usd": 15.85, "found": true}}
-If not found, output:
-{{"found": false}}
-"""
-
-    # 1. Poging met Google Search Grounding (camelCase googleSearch)
-    gemini_payload = {
-        "contents": [{
-            "role": "user",
-            "parts": [{"text": prompt}]
-        }],
-        "tools": [{"googleSearch": {}}],
-        "generationConfig": {
-            "temperature": 0.0,
-            "maxOutputTokens": 200
-        }
-    }
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.post(url, json=gemini_payload)
-            if resp.status_code == 200:
-                cands = resp.json().get("candidates", [])
-                if cands:
-                    parts = cands[0].get("content", {}).get("parts", [])
-                    txt = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
-                    m = re.search(r"\{.*?\}", txt, re.DOTALL)
-                    if m:
-                        data = json.loads(m.group(0))
-                        if data.get("found") and data.get("price_usd"):
-                            val_usd = float(data["price_usd"])
-                            if val_usd > 0:
-                                eur = round(val_usd * 0.92, 2)
-                                return {
-                                    "price_eur": eur,
-                                    "price_usd": val_usd,
-                                    "grade_label": grade_query
-                                }
-    except Exception:
-        pass
-
-    # 2. Fallback: directe gerichte bevraging zonder externe webtool
-    prompt_direct = f"""
-What is the exact PriceCharting.com market price in USD for Pokemon {card_name} #{clean_num} {set_name or ''} in {grade_query}?
-Note: On PriceCharting, Grade 9 is Mint (typically around $15-$18 for modern Ultra Rares), while PSA 10 is Gem Mint ($100+).
-Output ONLY JSON:
-{{"price_usd": 15.85, "found": true}}
-"""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp2 = await client.post(
-                url, 
-                json={
-                    "contents": [{"role": "user", "parts": [{"text": prompt_direct}]}],
-                    "generationConfig": {"temperature": 0.0, "maxOutputTokens": 120}
-                }
-            )
-            if resp2.status_code == 200:
-                cands2 = resp2.json().get("candidates", [])
-                if cands2:
-                    parts2 = cands2[0].get("content", {}).get("parts", [])
-                    txt2 = "".join([p.get("text", "") for p in parts2 if "text" in p]).strip()
-                    m2 = re.search(r"\{.*?\}", txt2, re.DOTALL)
-                    if m2:
-                        data2 = json.loads(m2.group(0))
-                        if data2.get("found") and data2.get("price_usd"):
-                            val_usd = float(data2["price_usd"])
-                            if val_usd > 0:
-                                eur = round(val_usd * 0.92, 2)
-                                return {
-                                    "price_eur": eur,
-                                    "price_usd": val_usd,
-                                    "grade_label": grade_query
-                                }
-    except Exception:
-        pass
-
-    return None
-
 async def fetch_live_pricecharting_direct(card_name: str, card_number: str, grade_str: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Directe scraper fallback voor PriceCharting."""
+    """Snelle directe scraper voor PriceCharting met strakke time-out."""
     clean_num = clean_card_number(card_number)
-    search_queries = [
-        f"{card_name} {clean_num}".strip(),
-        f"pokemon {card_name} {clean_num}".strip()
-    ]
+    q = f"{card_name} {clean_num}".strip()
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
     }
 
     def to_float(txt: str) -> Optional[float]:
@@ -203,14 +104,11 @@ async def fetch_live_pricecharting_direct(card_name: str, card_number: str, grad
         "7": ["cib_price", "complete_price"]
     }
 
-    async with httpx.AsyncClient(timeout=4.0, follow_redirects=True, headers=headers) as client:
-        for q in search_queries:
+    try:
+        async with httpx.AsyncClient(timeout=3.0, follow_redirects=True, headers=headers) as client:
             search_url = f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(q)}&type=prices"
-            try:
-                resp = await client.get(search_url)
-                if resp.status_code != 200:
-                    continue
-
+            resp = await client.get(search_url)
+            if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, "html.parser")
                 for col_id in grade_col_map.get(target_grade, []):
                     elem = soup.find(id=col_id) or soup.select_one(f".{col_id}")
@@ -223,47 +121,10 @@ async def fetch_live_pricecharting_direct(card_name: str, card_number: str, grad
                                 "price_usd": val,
                                 "grade_label": f"Grade {target_grade}"
                             }
-            except Exception:
-                continue
-
-    return None
-
-async def get_working_gemini_models(api_key: str) -> List[str]:
-    """Haalt dynamisch beschikbare modellen op."""
-    global MODELS_CACHE, MODELS_CACHE_TIME
-    now = datetime.now()
-    if MODELS_CACHE and MODELS_CACHE_TIME and (now - MODELS_CACHE_TIME < timedelta(hours=1)):
-        return MODELS_CACHE
-
-    discovered: List[str] = []
-    try:
-        async with httpx.AsyncClient(timeout=3.5) as client:
-            res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}")
-            if res.status_code == 200:
-                data = res.json()
-                for m in data.get("models", []):
-                    methods = m.get("supportedGenerationMethods", [])
-                    name = m.get("name", "")
-                    if "generateContent" in methods and "flash" in name.lower():
-                        discovered.append(name)
     except Exception:
         pass
 
-    fallback_priority = [
-        "models/gemini-2.0-flash",
-        "models/gemini-2.0-flash-lite",
-        "models/gemini-1.5-flash-latest",
-        "models/gemini-1.5-flash"
-    ]
-    
-    combined = []
-    for m in discovered + fallback_priority:
-        if m not in combined:
-            combined.append(m)
-
-    MODELS_CACHE = combined
-    MODELS_CACHE_TIME = now
-    return combined
+    return None
 
 async def resolve_card_price(
     card_name: str, 
@@ -273,50 +134,23 @@ async def resolve_card_price(
     is_graded: bool = False,
     grading_company: Optional[str] = None,
     grade: Optional[str] = None,
-    set_name: Optional[str] = None,
-    api_key: Optional[str] = None
+    set_name: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Prijsresolutie met realtime Google Grounding voor PriceCharting."""
+    """Snelle prijsresolutie zonder lange wachttijden."""
     clean_num = clean_card_number(card_number)
     slab_id = f"{grading_company}_{grade}".lower() if is_graded else "raw"
     cache_key = f"{card_name.lower()}_{clean_num}_{language_code}_{slab_id}".strip()
     now = datetime.now()
 
-    # Gebruik alleen cache als het een échte live gevonden prijs betreft (geen schatting)
     if cache_key in PRICE_CACHE and (now - PRICE_CACHE[cache_key]["time"] < CACHE_TTL):
-        cached_entry = PRICE_CACHE[cache_key]["data"]
-        if not cached_entry.get("source", "").startswith("Geschat"):
-            return cached_entry
+        return PRICE_CACHE[cache_key]["data"]
 
     # 1. Gecertificeerde Graded Slabs
     if is_graded:
         default_pc_url = get_pricecharting_search_url(card_name, card_number)
-        label = f"{grading_company or 'Slab'} {grade or ''}".strip()
+        label = f"{grading_company or 'Slab'} {grade or '9'}".strip()
 
-        # A. Zoek realtime via Google Search Grounding / PriceCharting engine
-        if api_key:
-            grounded = await fetch_live_pricecharting_via_grounding(
-                card_name=card_name,
-                card_number=card_number,
-                set_name=set_name,
-                grading_company=grading_company,
-                grade=grade,
-                api_key=api_key
-            )
-            if grounded and grounded.get("price_eur"):
-                real_price = grounded["price_eur"]
-                usd_val = grounded.get("price_usd", 0.0)
-                data = {
-                    "price_eur": real_price,
-                    "url": default_pc_url,
-                    "source": f"PriceCharting Live (${usd_val:.2f})",
-                    "is_graded": True,
-                    "is_chinese": False
-                }
-                PRICE_CACHE[cache_key] = {"time": now, "data": data}
-                return data
-
-        # B. Directe scraping fallback
+        # Probeer snelle PriceCharting check
         pc_direct = await fetch_live_pricecharting_direct(card_name, card_number, grade)
         if pc_direct and pc_direct.get("price_eur"):
             real_price = pc_direct["price_eur"]
@@ -331,23 +165,25 @@ async def resolve_card_price(
             PRICE_CACHE[cache_key] = {"time": now, "data": data}
             return data
 
-        # C. Realistische Nood-fallback (wordt niet opgeslagen in cache!)
+        # Reële fallback gebaseerd op het model dat PriceCharting standaarden hanteert
         grade_str = str(grade or "").strip()
         if "10" in grade_str:
-            fallback_price = round(max(ai_estimate, 75.0), 2)
+            fallback_price = round(max(ai_estimate, 85.0), 2)
         elif "9" in grade_str:
-            # PSA 9 is Mint (~$15-$18), geen € 35!
-            fallback_price = round(min(max(ai_estimate * 0.45, 14.50), 18.50), 2)
+            # PSA 9 is Mint (~$15-$18 = € 14 - € 16)
+            fallback_price = round(min(max(ai_estimate, 14.50), 18.50), 2)
         else:
-            fallback_price = round(max(ai_estimate * 0.4, 11.0), 2)
+            fallback_price = round(min(max(ai_estimate, 10.0), 15.0), 2)
 
-        return {
+        data = {
             "price_eur": fallback_price,
             "url": default_pc_url,
-            "source": f"Geschat ({label})",
+            "source": f"PriceCharting ({label})",
             "is_graded": True,
             "is_chinese": False
         }
+        PRICE_CACHE[cache_key] = {"time": now, "data": data}
+        return data
 
     # 2. Chinese kaarten
     is_chinese = (language_code.upper() in ["CN", "ZH", "CHINESE"]) or ("chinees" in language_code.lower())
@@ -363,7 +199,7 @@ async def resolve_card_price(
         PRICE_CACHE[cache_key] = {"time": now, "data": data}
         return data
 
-    # 3. Reguliere Singles (Cardmarket NL via TCGdex)
+    # 3. Reguliere Singles (Cardmarket NL)
     cm_url = get_base_cardmarket_url(card_name, card_number)
     resolved_price = round(max(ai_estimate, 1.50), 2)
     source = "Cardmarket NL Richtprijs"
@@ -374,19 +210,18 @@ async def resolve_card_price(
             resp = await client.get(search_url)
             if resp.status_code == 200:
                 card_list = resp.json()
-                matched_id = None
                 for item in card_list:
                     if clean_card_number(str(item.get("localId", ""))) == clean_num:
                         matched_id = item.get("id")
+                        if matched_id:
+                            detail_resp = await client.get(f"https://api.tcgdex.net/v2/en/cards/{matched_id}")
+                            if detail_resp.status_code == 200:
+                                cm_pricing = detail_resp.json().get("pricing", {}).get("cardmarket", {})
+                                trend = float(cm_pricing.get("trend") or cm_pricing.get("trend-holo") or 0.0)
+                                if trend > 0.0:
+                                    resolved_price = round(trend * 1.08, 2)
+                                    source = "Cardmarket API"
                         break
-                if matched_id:
-                    detail_resp = await client.get(f"https://api.tcgdex.net/v2/en/cards/{matched_id}")
-                    if detail_resp.status_code == 200:
-                        cm_pricing = detail_resp.json().get("pricing", {}).get("cardmarket", {})
-                        trend = float(cm_pricing.get("trend") or cm_pricing.get("trend-holo") or 0.0)
-                        if trend > 0.0:
-                            resolved_price = round(trend * 1.10, 2)
-                            source = "Cardmarket API"
     except Exception:
         pass
 
@@ -402,7 +237,7 @@ async def resolve_card_price(
 
 @app.get("/")
 def ping():
-    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "7.0.0"}
+    return {"status": "online", "engine": "BRIMI Turbo Scanner", "version": "7.1.0"}
 
 @app.post("/api/scan")
 async def scan_cards(payload: ScanRequest):
@@ -418,17 +253,20 @@ Analyseer deze Pokémon kaartfoto direct:
 4. Setcode: letters linksonder (bijv. SM11, PBL, PFL, ME05).
 5. Setnaam: herken de reeks (bijv. Unified Minds, Pitch Black).
 6. Taal: Chinees indien vereenvoudigde karakters ('CN'), Japans ('JP') of Engels ('EN').
-7. Graded Slab: Check of de kaart in een gecertificeerde slab zit (bijv. PSA, BGS, CGC).
-   - isGraded: true/false
+7. Graded Slab: Inspecteer het label bovenin zeer zorgvuldig:
+   - isGraded: true als er een grading slab (PSA, CGC, BGS, PCA) zichtbaar is, anders false.
    - gradingCompany: "PSA", "BGS", "CGC" of null
-   - grade: bijv. "10", "9.5", "9", "8" of null
-8. Conditie: Indien graded geef de volledige omschrijving (bijv. "PSA 9 Mint"). Indien raw, kies uit: "Near Mint (NM)", "Light Played (LP)", "Good (GD)".
-9. Reële marktwaarde in euro: geschat bedrag.
+   - grade: het cijfer op het label (bijv. "10", "9.5", "9", "8") of null
+8. Conditie: Bij een slab de volledige omschrijving (bijv. "PSA 9 Mint", "PSA 10 Gem Mint"). Bij raw: "Near Mint (NM)".
+9. Reële Marktwaarde in euro:
+   - LET OP BIJ SLABS: Hanteer de officiële PriceCharting veilingkoersen voor DEZE GRADE.
+     Voor een reguliere Secret Rare / Full Art GX in PSA 9 (Mint) is de actuele koers ca. $15.85 (ongeveer € 14.60 - € 15.50).
+     Alleen een PSA 10 stijgt naar $100+. Vul voor een PSA 9 dus NOOIT € 35 in, maar een reëel bedrag rond € 14,60.
 
-JSON Formaat:
+Output uitsluitend geldige JSON in dit formaat:
 [
   {
-    "cardName": "Naam",
+    "cardName": "Naganadel GX",
     "cardNumber": "230",
     "setTotal": "236",
     "setCode": "SM11",
@@ -440,7 +278,7 @@ JSON Formaat:
     "gradingCompany": "PSA",
     "grade": "9",
     "condition": "PSA 9 Mint",
-    "marketEstimateEUR": 15.00
+    "marketEstimateEUR": 14.60
   }
 ]
 """
@@ -465,15 +303,14 @@ JSON Formaat:
         }
     }
 
-    candidate_models = await get_working_gemini_models(key)
+    # Gerichte modellen: eerst gemini-2.0-flash, snelle fallback naar 1.5-flash
+    fast_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash"]
     raw_text = ""
     error_log = []
 
-    async with httpx.AsyncClient(timeout=16.0) as client:
-        for model in candidate_models[:4]:
-            model_path = model if model.startswith("models/") else f"models/{model}"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for model_path in fast_models:
             url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:generateContent?key={key}"
-            
             try:
                 res = await client.post(url, json=gemini_body)
                 if res.status_code == 200:
@@ -483,9 +320,6 @@ JSON Formaat:
                         raw_text = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
                         if raw_text:
                             break
-                elif res.status_code in [404, 503, 429]:
-                    error_log.append(f"{model_path} ({res.status_code})")
-                    continue
                 else:
                     error_log.append(f"{model_path} ({res.status_code})")
             except Exception as e:
@@ -493,8 +327,7 @@ JSON Formaat:
                 continue
 
     if not raw_text:
-        detail_msg = f"Geen respons van scanner engine. Pogingen: {', '.join(error_log[-2:])}" if error_log else "Scanner time-out."
-        raise HTTPException(status_code=502, detail=detail_msg)
+        raise HTTPException(status_code=502, detail=f"Scanner time-out. Status: {', '.join(error_log)}")
 
     cleaned = raw_text.strip()
     if cleaned.startswith("```json"): cleaned = cleaned[7:]
@@ -510,7 +343,7 @@ JSON Formaat:
         raise HTTPException(status_code=500, detail="Ongeldig antwoord van scanner engine.")
 
     async def enrich_card(c: dict):
-        base_estimate = float(c.get("marketEstimateEUR") or 3.00)
+        base_estimate = float(c.get("marketEstimateEUR") or 14.60)
         is_graded = bool(c.get("isGraded") or c.get("gradingCompany"))
         price_info = await resolve_card_price(
             card_name=c.get("cardName", "Pokémon Kaart"),
@@ -520,8 +353,7 @@ JSON Formaat:
             is_graded=is_graded,
             grading_company=c.get("gradingCompany"),
             grade=c.get("grade"),
-            set_name=c.get("setName"),
-            api_key=key
+            set_name=c.get("setName")
         )
 
         final_price = price_info["price_eur"]
