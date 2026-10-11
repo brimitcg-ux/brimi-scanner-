@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Scanner Precision Engine", version="8.9.0")
+app = FastAPI(title="BRIMI Precision Database Engine", version="9.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,82 +32,189 @@ class ScanRequest(BaseModel):
     image_base64: str
     mime_type: Optional[str] = "image/jpeg"
 
+# ---------------------------------------------------------------------------
+# OFFICIËLE POKÉMON SET-CODE & ID DICTIONARY
+# Vertaalt de 3- of 4-letterige setcode linksonder naar officiële sets & API-ID's
+# ---------------------------------------------------------------------------
+SET_CODE_MAP: Dict[str, Dict[str, str]] = {
+    # Scarlet & Violet Series
+    "PRE": {"name": "Prismatic Evolutions", "tcgdex": "sv08.5"},
+    "SSP": {"name": "Surging Sparks", "tcgdex": "sv08"},
+    "SCR": {"name": "Stellar Crown", "tcgdex": "sv07"},
+    "SFA": {"name": "Shrouded Fable", "tcgdex": "sv06.5"},
+    "TWM": {"name": "Twilight Masquerade", "tcgdex": "sv06"},
+    "TEF": {"name": "Temporal Forces", "tcgdex": "sv05"},
+    "PAF": {"name": "Paldean Fates", "tcgdex": "sv04.5"},
+    "PAR": {"name": "Paradox Rift", "tcgdex": "sv04"},
+    "MEW": {"name": "151", "tcgdex": "sv03.5"},
+    "151": {"name": "151", "tcgdex": "sv03.5"},
+    "OBF": {"name": "Obsidian Flames", "tcgdex": "sv03"},
+    "PAL": {"name": "Paldea Evolved", "tcgdex": "sv02"},
+    "SVI": {"name": "Scarlet & Violet Base", "tcgdex": "sv01"},
+
+    # Sword & Shield Series
+    "CRZ": {"name": "Crown Zenith", "tcgdex": "swsh12.5"},
+    "CZ":  {"name": "Crown Zenith", "tcgdex": "swsh12.5"},
+    "SIT": {"name": "Silver Tempest", "tcgdex": "swsh12"},
+    "ST":  {"name": "Silver Tempest", "tcgdex": "swsh12"},
+    "LOR": {"name": "Lost Origin", "tcgdex": "swsh11"},
+    "LO":  {"name": "Lost Origin", "tcgdex": "swsh11"},
+    "PGO": {"name": "Pokémon GO", "tcgdex": "pgo"},
+    "ASR": {"name": "Astral Radiance", "tcgdex": "swsh10"},
+    "BRS": {"name": "Brilliant Stars", "tcgdex": "swsh09"},
+    "FST": {"name": "Fusion Strike", "tcgdex": "swsh08"},
+    "CEL": {"name": "Celebrations", "tcgdex": "cel25"},
+    "EVS": {"name": "Evolving Skies", "tcgdex": "swsh07"},
+    "CRE": {"name": "Chilling Reign", "tcgdex": "swsh06"},
+    "BST": {"name": "Battle Styles", "tcgdex": "swsh05"},
+    "SHF": {"name": "Shining Fates", "tcgdex": "swsh04.5"},
+    "VIV": {"name": "Vivid Voltage", "tcgdex": "swsh04"},
+    "CPA": {"name": "Champion's Path", "tcgdex": "swsh03.5"},
+    "DAA": {"name": "Darkness Ablaze", "tcgdex": "swsh03"},
+    "RCL": {"name": "Rebel Clash", "tcgdex": "swsh02"},
+    "SSH": {"name": "Sword & Shield Base", "tcgdex": "swsh01"},
+
+    # Sun & Moon Series
+    "CEC": {"name": "Cosmic Eclipse", "tcgdex": "sm12"},
+    "HIF": {"name": "Hidden Fates", "tcgdex": "sm115"},
+    "UNM": {"name": "Unified Minds", "tcgdex": "sm11"},
+    "UNB": {"name": "Unbroken Bonds", "tcgdex": "sm10"},
+    "DET": {"name": "Detective Pikachu", "tcgdex": "det1"},
+    "TEU": {"name": "Team Up", "tcgdex": "sm09"},
+    "LOT": {"name": "Lost Thunder", "tcgdex": "sm08"},
+    "DRM": {"name": "Dragon Majesty", "tcgdex": "sm75"},
+    "CES": {"name": "Celestial Storm", "tcgdex": "sm07"},
+    "FLI": {"name": "Forbidden Light", "tcgdex": "sm06"},
+    "UPR": {"name": "Ultra Prism", "tcgdex": "sm05"},
+    "CIN": {"name": "Crimson Invasion", "tcgdex": "sm04"},
+    "SLG": {"name": "Shining Legends", "tcgdex": "sm35"},
+    "BUS": {"name": "Burning Shadows", "tcgdex": "sm03"},
+    "GRI": {"name": "Guardians Rising", "tcgdex": "sm02"},
+    "SUM": {"name": "Sun & Moon Base", "tcgdex": "sm01"},
+
+    # XY Series
+    "EVO": {"name": "Evolutions", "tcgdex": "xy12"},
+    "STS": {"name": "Steam Siege", "tcgdex": "xy11"},
+    "FCO": {"name": "Fates Collide", "tcgdex": "xy10"},
+    "GEN": {"name": "Generations", "tcgdex": "g1"},
+    "BKP": {"name": "BREAKpoint", "tcgdex": "xy09"},
+    "BKT": {"name": "BREAKthrough", "tcgdex": "xy08"},
+    "AOR": {"name": "Ancient Origins", "tcgdex": "xy07"},
+    "ROS": {"name": "Roaring Skies", "tcgdex": "xy06"},
+    "PRC": {"name": "Primal Clash", "tcgdex": "xy05"},
+    "PHF": {"name": "Phantom Forces", "tcgdex": "xy04"},
+    "FFI": {"name": "Furious Fists", "tcgdex": "xy03"},
+    "FLF": {"name": "Flashfire", "tcgdex": "xy02"},
+    "XY":  {"name": "XY Base", "tcgdex": "xy01"}
+}
+
 def clean_card_number(raw_num: str) -> str:
     if not raw_num:
         return ""
     main_num = str(raw_num).split("/")[0].strip()
-    return re.sub(r"^0+", "", main_num) or "0"
+    # Strip leading zeroes voor TCGdex matching (bijv. "064" -> "64")
+    stripped = re.sub(r"^0+", "", main_num)
+    return stripped or "0"
 
-def get_base_cardmarket_url(card_name: str, card_number: str) -> str:
+def get_base_cardmarket_url(card_name: str, card_number: str, set_name: Optional[str] = None) -> str:
     clean_num = clean_card_number(card_number)
-    query = f"{card_name} {clean_num}".strip()
+    terms = [card_name, clean_num]
+    if set_name and set_name != "Onbekende Set":
+        terms.append(set_name)
+    query = " ".join(terms).strip()
     return f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(query)}&sellerCountry=17&minCondition=2"
 
-def get_pricecharting_url(card_name: str, card_number: str) -> str:
+def get_pricecharting_url(card_name: str, card_number: str, set_name: Optional[str] = None) -> str:
     clean_num = clean_card_number(card_number)
-    query = f"pokemon {card_name} {clean_num}".strip()
+    terms = ["pokemon", card_name, clean_num]
+    if set_name and set_name != "Onbekende Set":
+        terms.append(set_name)
+    query = " ".join(terms).strip()
     return f"https://www.pricecharting.com/search-products?q={urllib.parse.quote_plus(query)}&type=prices"
 
-async def enrich_cardmarket_data(client: httpx.AsyncClient, card_name: str, card_number: str) -> Optional[Dict[str, Any]]:
+def get_cert_url(company: Optional[str], cert_num: Optional[str]) -> Optional[str]:
+    if not cert_num or not company:
+        return None
+    clean_cert = re.sub(r"[^0-9]", "", str(cert_num))
+    if not clean_cert:
+        return None
+    comp_upper = company.upper()
+    if "PSA" in comp_upper:
+        return f"https://www.psacard.com/cert/{clean_cert}"
+    if "CGC" in comp_upper:
+        return f"https://www.cgccards.com/certlookup/{clean_cert}/"
+    if "BGS" in comp_upper or "BECKETT" in comp_upper:
+        return f"https://www.beckett.com/grading/card-lookup?item_type=BGS&item_id={clean_cert}"
+    return None
+
+async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str, card_number: str) -> Optional[Dict[str, Any]]:
     """
-    Haalt live Cardmarket beursdata (trend, low, avg30) op via de TCGdex API.
-    Draait met een strakke timeout zodat de scanner altijd vliegensvlug blijft.
+    Haalt officiële Cardmarket Trend, Low en Avg30 data op via TCGdex.
+    Prioriteit 1: Exacte Set Code matching (bijv. MEW -> sv03.5/64).
+    Prioriteit 2: Zoekopdracht op Kaartnaam + Nummer.
     """
     clean_num = clean_card_number(card_number)
-    if not card_name or not clean_num:
-        return None
+    raw_num = str(card_number).split("/")[0].strip()
+    matched_set = SET_CODE_MAP.get(set_code.upper().strip()) if set_code else None
 
-    # Eenvoudige zoeknaam zonder GX/V/ex toevoegingen voor bredere database matching
-    simple_name = re.sub(r"(?i)\b(gx|ex|v|vmax|vstar)\b", "", card_name).strip()
-    search_q = simple_name or card_name
+    # Strategie 1: Directe set lookup als set-code bekend is
+    if matched_set and matched_set.get("tcgdex"):
+        set_id = matched_set["tcgdex"]
+        for try_num in [raw_num, clean_num]:
+            url = f"https://api.tcgdex.net/v2/en/sets/{set_id}/{try_num}"
+            try:
+                res = await client.get(url, timeout=2.2)
+                if res.status_code == 200:
+                    detail = res.json()
+                    cm = detail.get("pricing", {}).get("cardmarket", {})
+                    if cm:
+                        trend = cm.get("trend") or cm.get("trend-holo")
+                        low = cm.get("low") or cm.get("low-holo")
+                        avg30 = cm.get("avg30") or cm.get("avg30-holo")
+                        if trend or low:
+                            return {
+                                "trend": float(trend) if trend else None,
+                                "low": float(low) if low else None,
+                                "avg30": float(avg30) if avg30 else None,
+                                "official_name": detail.get("name"),
+                                "official_set": matched_set["name"]
+                            }
+            except Exception:
+                pass
 
-    try:
-        url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(search_q)}"
-        res = await client.get(url, timeout=2.2)
-        if res.status_code != 200:
-            return None
-
-        candidates = res.json()
-        if not isinstance(candidates, list) or not candidates:
-            return None
-
-        # Zoek kaart met hetzelfde localId/nummer
-        matched_id = None
-        for cand in candidates:
-            cand_local = str(cand.get("localId", "")).strip()
-            if cand_local == clean_num or clean_card_number(cand_local) == clean_num:
-                matched_id = cand.get("id")
-                break
-
-        if not matched_id:
-            # Eerste fallback: check of het nummer voorkomt in het ID (bijv. mew-064)
-            for cand in candidates:
-                if str(clean_num) in str(cand.get("id", "")):
-                    matched_id = cand.get("id")
-                    break
-
-        if not matched_id:
-            return None
-
-        # Detail fetch voor Cardmarket beursprijzen
-        detail_res = await client.get(f"https://api.tcgdex.net/v2/en/cards/{matched_id}", timeout=2.2)
-        if detail_res.status_code == 200:
-            detail = detail_res.json()
-            cm_pricing = detail.get("pricing", {}).get("cardmarket", {})
-            if cm_pricing:
-                trend = cm_pricing.get("trend") or cm_pricing.get("trend-holo")
-                low = cm_pricing.get("low") or cm_pricing.get("low-holo")
-                avg30 = cm_pricing.get("avg30") or cm_pricing.get("avg30-holo")
-                if trend or low:
-                    return {
-                        "trend": float(trend) if trend else None,
-                        "low": float(low) if low else None,
-                        "avg30": float(avg30) if avg30 else None,
-                        "cardmarket_id": detail.get("id"),
-                        "official_name": detail.get("name")
-                    }
-    except Exception:
-        pass
+    # Strategie 2: Zoeken op naam als set_code niet direct matcht
+    if card_name and clean_num:
+        clean_name = re.sub(r"(?i)\b(gx|ex|v|vmax|vstar|lv\.x|prime)\b", "", card_name).strip()
+        search_q = clean_name or card_name
+        try:
+            url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(search_q)}"
+            res = await client.get(url, timeout=2.0)
+            if res.status_code == 200:
+                cands = res.json()
+                if isinstance(cands, list):
+                    for cand in cands:
+                        cand_local = str(cand.get("localId", "")).strip()
+                        if cand_local in [clean_num, raw_num] or clean_card_number(cand_local) == clean_num:
+                            card_id = cand.get("id")
+                            if card_id:
+                                d_res = await client.get(f"https://api.tcgdex.net/v2/en/cards/{card_id}", timeout=2.0)
+                                if d_res.status_code == 200:
+                                    detail = d_res.json()
+                                    cm = detail.get("pricing", {}).get("cardmarket", {})
+                                    if cm:
+                                        trend = cm.get("trend") or cm.get("trend-holo")
+                                        low = cm.get("low") or cm.get("low-holo")
+                                        avg30 = cm.get("avg30") or cm.get("avg30-holo")
+                                        if trend or low:
+                                            return {
+                                                "trend": float(trend) if trend else None,
+                                                "low": float(low) if low else None,
+                                                "avg30": float(avg30) if avg30 else None,
+                                                "official_name": detail.get("name"),
+                                                "official_set": detail.get("set", {}).get("name")
+                                            }
+        except Exception:
+            pass
 
     return None
 
@@ -130,19 +237,7 @@ def robust_parse_cards(raw_text: str) -> List[Dict[str, Any]]:
     except Exception:
         pass
 
-    try:
-        start_idx = cleaned.find("[")
-        if start_idx != -1:
-            sub = cleaned[start_idx:]
-            last_brace = sub.rfind("}")
-            if last_brace != -1:
-                repaired = sub[:last_brace + 1].strip() + "]"
-                data = json.loads(repaired)
-                if isinstance(data, list):
-                    return data
-    except Exception:
-        pass
-
+    # Regex vangnet bij afkappingen of JSON fouten
     card_objects = []
     blocks = re.findall(r"\{[^{}]*\}", cleaned, re.DOTALL)
     for b in blocks:
@@ -155,8 +250,9 @@ def robust_parse_cards(raw_text: str) -> List[Dict[str, Any]]:
         lang_m = re.search(r'"language"\s*:\s*"([^"]+)"', b)
         price_m = re.search(r'"marketEstimateEUR"\s*:\s*([0-9\.]+)', b)
         graded_m = re.search(r'"isGraded"\s*:\s*(true|false)', b, re.IGNORECASE)
-        grade_m = re.search(r'"grade"\s*:\s*([0-9\.]+)', b)
         comp_m = re.search(r'"gradingCompany"\s*:\s*"([^"]+)"', b)
+        grade_m = re.search(r'"grade"\s*:\s*"([^"]+)"', b)
+        cert_m = re.search(r'"certNumber"\s*:\s*"([^"]+)"', b)
 
         if name_m:
             obj["cardName"] = name_m.group(1)
@@ -169,8 +265,9 @@ def robust_parse_cards(raw_text: str) -> List[Dict[str, Any]]:
             obj["isGraded"] = True if (graded_m and graded_m.group(1).lower() == "true") else False
             obj["gradingCompany"] = comp_m.group(1) if comp_m else None
             obj["grade"] = grade_m.group(1) if grade_m else None
+            obj["certNumber"] = cert_m.group(1) if cert_m else None
             obj["condition"] = f"{obj['gradingCompany']} {obj['grade']}" if obj["isGraded"] else "Near Mint (NM)"
-            obj["marketEstimateEUR"] = float(price_m.group(1)) if price_m else 4.50
+            obj["marketEstimateEUR"] = float(price_m.group(1)) if price_m else 4.00
             card_objects.append(obj)
 
     return card_objects
@@ -180,7 +277,7 @@ def health_check():
     key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
     return {
         "status": "online",
-        "engine": "BRIMI Precision Engine 8.9 (Cardmarket + PriceCharting Verified)",
+        "engine": "BRIMI Precision Database Engine 9.2 (Cardmarket Live + Set-Code Resolver)",
         "gemini_api_key_configured": key_configured
     }
 
@@ -199,23 +296,21 @@ async def scan_cards(payload: ScanRequest):
     clean_b64 = clean_b64.replace("\n", "").replace("\r", "").strip()
 
     prompt = """
-Analyseer alle Pokémon kaarten op de afbeelding. Dit kan 1 enkele kaart zijn of meerdere tegelijk op tafel.
-Scan elke kaart systematisch van links naar rechts en boven naar onder.
-
-Herken exact:
-- cardName: Officiële kaartnaam (bijv. Goldeen, Naganadel-GX, Palafin, Charizard ex).
-- cardNumber: Nummer vóór de schuine streep (bijv. "064" of "230").
-- setTotal: Totaal ná de schuine streep (bijv. "064" of "236").
-- setCode: Setcode linksonder indien zichtbaar (bijv. MEW, UNM, OBF).
-- setName: Setnaam (bijv. 151, Unified Minds, Obsidian Flames).
-- language: "Engels", "Japans" of "Chinees".
-- languageCode: "EN", "JP" of "CN".
-- rarity: Zeldzaamheid (bijv. Illustration Rare, Secret Rare, Ultra Rare).
-- isGraded: true als in PSA/CGC/BGS/PCA slab, anders false.
-- gradingCompany: "PSA", "BGS", "CGC" of null.
-- grade: Cijfer op slab label (bijv. "9", "9.5", "10") of null.
-- condition: Bij slab bijv. "PSA 9 Mint", anders "Near Mint (NM)".
-- marketEstimateEUR: Realistische Cardmarket NL prijs (ongegradeerd) of PriceCharting veilingkoers (slab).
+Je bent een Pokémon TCG visuele OCR-analist. Analyseer alle Pokémon kaarten op de afbeelding.
+Lees voor ELKE kaart met uiterste precisie:
+1. cardName: Officiële kaartnaam (bijv. "Goldeen", "Naganadel-GX", "Palafin", "Charizard ex").
+2. cardNumber: Nummer vóór de slash (bijv. "064", "230", "014").
+3. setTotal: Nummer ná de slash (bijv. "064", "236", "197").
+4. setCode: De 3 of 4 letters linksonder (bijv. MEW, UNM, OBF, PAL, PAF, PAR, CRZ, LOR, SIT). Kijk nauwkeurig!
+5. setName: Naam van de set als bekend (bijv. "Unified Minds", "151", "Paldea Evolved").
+6. language: "Engels", "Japans" of "Chinees".
+7. languageCode: "EN", "JP" of "CN".
+8. rarity: Zeldzaamheid (bijv. "Illustration Rare", "Secret Rare", "Ultra Rare", "Common").
+9. isGraded: true als in PSA, CGC, BGS of PCA slab, anders false.
+10. gradingCompany: "PSA", "CGC", "BGS" of null.
+11. grade: Het cijfer op het label (bijv. "9", "9.5", "10") of null.
+12. certNumber: Het unieke serienummer op het slab-label of onder de barcode (bijv. "45022248") of null.
+13. marketEstimateEUR: Realistische conservatieve marktwaarde in EUR als fallback.
 
 Retourneer ALLEEN een geldige JSON array:
 [
@@ -231,6 +326,7 @@ Retourneer ALLEEN een geldige JSON array:
     "isGraded": true,
     "gradingCompany": "PSA",
     "grade": "9",
+    "certNumber": "45022248",
     "condition": "PSA 9 Mint",
     "marketEstimateEUR": 15.50
   }
@@ -261,7 +357,7 @@ Retourneer ALLEEN een geldige JSON array:
     last_error = ""
 
     async with httpx.AsyncClient(timeout=45.0) as client:
-        # Dynamische modellenlijst
+        # Haal actieve beschikbare Flash modellen op
         candidate_models = []
         try:
             m_res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
@@ -290,7 +386,7 @@ Retourneer ALLEEN een geldige JSON array:
                         if raw_text:
                             break
                 else:
-                    last_error = f"{model_name} HTTP {res.status_code}: {res.text[:120]}"
+                    last_error = f"{model_name} HTTP {res.status_code}"
             except Exception as e:
                 last_error = str(e)
 
@@ -307,10 +403,17 @@ Retourneer ALLEEN een geldige JSON array:
             content={"detail": "Geen kaartgegevens kunnen structureren uit het antwoord."}
         )
 
-    # Parallel Cardmarket database verrijking
+    # -----------------------------------------------------------------------
+    # VERRIJKING MET OFFICIËLE CARDMARKET DATA VIA SET-CODE LOOKUP & TCGDEX
+    # -----------------------------------------------------------------------
     async with httpx.AsyncClient() as cm_client:
         enrich_tasks = [
-            enrich_cardmarket_data(cm_client, c.get("cardName", ""), str(c.get("cardNumber", "")))
+            query_tcgdex(
+                cm_client,
+                c.get("setCode", ""),
+                c.get("cardName", ""),
+                str(c.get("cardNumber", ""))
+            )
             for c in cards_data
         ]
         enriched_results = await asyncio.gather(*enrich_tasks, return_exceptions=True)
@@ -320,9 +423,17 @@ Retourneer ALLEEN een geldige JSON array:
         is_graded = bool(c.get("isGraded") or c.get("gradingCompany"))
         card_name = c.get("cardName", "Pokémon Kaart")
         card_num = str(c.get("cardNumber", ""))
+        set_code = str(c.get("setCode", "")).upper().strip()
+        cert_num = str(c.get("certNumber", "")).strip() if c.get("certNumber") else None
+
+        # Set-naam normalisatie via onze officiële dictionary
+        resolved_set_name = c.get("setName", "Onbekende Set")
+        if set_code in SET_CODE_MAP:
+            resolved_set_name = SET_CODE_MAP[set_code]["name"]
+
         ai_price = float(c.get("marketEstimateEUR") or 3.50)
 
-        # Check of TCGdex Cardmarket beursdata beschikbaar is
+        # Controleer Cardmarket beursdata
         cm_data = None
         if idx < len(enriched_results) and isinstance(enriched_results[idx], dict):
             cm_data = enriched_results[idx]
@@ -331,33 +442,39 @@ Retourneer ALLEEN een geldige JSON array:
         avg30_eur = None
 
         if is_graded:
-            target_url = get_pricecharting_url(card_name, card_num)
+            target_url = get_pricecharting_url(card_name, card_num, resolved_set_name)
             price_source = f"PriceCharting Veilingkoers ({c.get('gradingCompany', 'Slab')} {c.get('grade', '')})".strip()
             final_price = ai_price
         else:
-            target_url = get_base_cardmarket_url(card_name, card_num)
+            target_url = get_base_cardmarket_url(card_name, card_num, resolved_set_name)
             if cm_data and (cm_data.get("trend") or cm_data.get("low")):
-                # Officiële Cardmarket Trendprijs
                 final_price = cm_data.get("trend") or cm_data.get("low")
                 low_price_eur = cm_data.get("low")
                 avg30_eur = cm_data.get("avg30")
                 price_source = "Cardmarket Trend (Geverifieerd)"
+                if cm_data.get("official_set"):
+                    resolved_set_name = cm_data["official_set"]
             else:
                 final_price = ai_price
                 price_source = "Cardmarket NL Marktindicatie"
+
+        # Directe verificatielink voor de graded slab (bijv. PSA Cert Check)
+        cert_verification_url = get_cert_url(c.get("gradingCompany"), cert_num) if is_graded else None
 
         results.append({
             "cardName": card_name,
             "cardNumber": card_num,
             "setTotal": c.get("setTotal", ""),
-            "setCode": c.get("setCode", ""),
-            "setName": c.get("setName", "Onbekende Set"),
+            "setCode": set_code,
+            "setName": resolved_set_name,
             "language": c.get("language", "Engels"),
             "languageCode": c.get("languageCode", "EN"),
             "rarity": c.get("rarity", ""),
             "isGraded": is_graded,
             "gradingCompany": c.get("gradingCompany"),
             "grade": c.get("grade"),
+            "certNumber": cert_num,
+            "certUrl": cert_verification_url,
             "condition": c.get("condition", "Near Mint (NM)"),
             "basePriceNM": round(final_price, 2),
             "estimatedPriceEUR": round(final_price, 2),
