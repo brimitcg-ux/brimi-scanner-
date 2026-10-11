@@ -1,7 +1,6 @@
 import os
 import json
 import re
-import asyncio
 import urllib.parse
 from typing import Optional, List, Dict, Any
 
@@ -11,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Precision Database Engine", version="11.0.0")
+app = FastAPI(title="BRIMI Fast Precision Engine", version="12.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,9 +31,6 @@ class ScanRequest(BaseModel):
     image_base64: str
     mime_type: Optional[str] = "image/jpeg"
 
-# ---------------------------------------------------------------------------
-# OFFICIËLE POKÉMON SET-CODE DICTIONARY
-# ---------------------------------------------------------------------------
 SET_CODE_MAP: Dict[str, Dict[str, str]] = {
     # 30th Anniversary & Special Expansions
     "30C":  {"name": "30th Celebration", "tcgdex": "30c"},
@@ -122,7 +118,6 @@ def clean_card_number(raw_num: str) -> str:
 
 def get_base_cardmarket_url(card_name: str, card_number: str) -> str:
     clean_num = clean_card_number(card_number)
-    # Zoeken op Kaartnaam + Nummer is het meest trefzeker op Cardmarket
     query = f"{card_name} {clean_num}".strip()
     return f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(query)}&sellerCountry=17&minCondition=2"
 
@@ -149,32 +144,6 @@ def get_cert_url(company: Optional[str], cert_num: Optional[str]) -> Optional[st
         return f"https://www.beckett.com/grading/card-lookup?item_type=BGS&item_id={clean_cert}"
     return None
 
-async def query_cardmarket_live_nl(client: httpx.AsyncClient, card_name: str, card_number: str) -> Optional[float]:
-    """Probeert rechtstreeks de laagste Cardmarket NL prijs op te halen."""
-    clean_num = clean_card_number(card_number)
-    query = f"{card_name} {clean_num}".strip()
-    url = f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={urllib.parse.quote_plus(query)}&sellerCountry=17&minCondition=2"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
-    }
-    try:
-        res = await client.get(url, headers=headers, timeout=2.2, follow_redirects=True)
-        if res.status_code == 200:
-            prices = re.findall(r'(\d+[\.,]\d{2})\s*€', res.text)
-            if prices:
-                parsed = []
-                for p in prices[:12]:
-                    v = float(p.replace(",", "."))
-                    if 0.10 <= v <= 2500.0:
-                        parsed.append(v)
-                if parsed:
-                    return min(parsed)
-    except Exception:
-        pass
-    return None
-
 async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str, card_number: str) -> Optional[Dict[str, Any]]:
     clean_num = clean_card_number(card_number)
     raw_num = str(card_number).split("/")[0].strip()
@@ -185,7 +154,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
         for try_num in [raw_num, clean_num]:
             url = f"https://api.tcgdex.net/v2/en/sets/{set_id}/{try_num}"
             try:
-                res = await client.get(url, timeout=2.0)
+                res = await client.get(url, timeout=1.8)
                 if res.status_code == 200:
                     detail = res.json()
                     cm = detail.get("pricing", {}).get("cardmarket", {})
@@ -209,7 +178,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
         search_q = clean_name or card_name
         try:
             url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(search_q)}"
-            res = await client.get(url, timeout=1.8)
+            res = await client.get(url, timeout=1.6)
             if res.status_code == 200:
                 cands = res.json()
                 if isinstance(cands, list):
@@ -218,7 +187,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
                         if cand_local in [clean_num, raw_num] or clean_card_number(cand_local) == clean_num:
                             card_id = cand.get("id")
                             if card_id:
-                                d_res = await client.get(f"https://api.tcgdex.net/v2/en/cards/{card_id}", timeout=1.8)
+                                d_res = await client.get(f"https://api.tcgdex.net/v2/en/cards/{card_id}", timeout=1.6)
                                 if d_res.status_code == 200:
                                     detail = d_res.json()
                                     cm = detail.get("pricing", {}).get("cardmarket", {})
@@ -297,7 +266,7 @@ def health_check():
     key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
     return {
         "status": "online",
-        "engine": "BRIMI Precision Database Engine 11.0 (Lowest CM NL + TCGdex)",
+        "engine": "BRIMI Fast Precision Engine 12.0 (Direct Flash + TCGdex)",
         "gemini_api_key_configured": key_configured
     }
 
@@ -341,25 +310,7 @@ Lees voor ELKE kaart nauwkeurig:
 12. certNumber: Serienummer van het label of null.
 13. marketEstimateEUR: Realistische conservatieve Cardmarket bodem/richtprijs in EUR (bijv. 2.40 voor Alolan Exeggutor 129/128, 68.00 voor Pikachu ex 149/128 SIR).
 
-Retourneer ALLEEN een geldige JSON array:
-[
-  {
-    "cardName": "Alolan Exeggutor",
-    "cardNumber": "129",
-    "setTotal": "128",
-    "setCode": "30C",
-    "setName": "30th Celebration",
-    "language": "Engels",
-    "languageCode": "EN",
-    "rarity": "Illustration Rare",
-    "isGraded": false,
-    "gradingCompany": null,
-    "grade": null,
-    "certNumber": null,
-    "condition": "Near Mint (NM)",
-    "marketEstimateEUR": 2.40
-  }
-]
+Retourneer ALLEEN een geldige JSON array.
 """
 
     gemini_body = {
@@ -385,23 +336,10 @@ Retourneer ALLEEN een geldige JSON array:
     raw_text = ""
     last_error = ""
 
-    async with httpx.AsyncClient(timeout=40.0) as client:
-        candidate_models = []
-        try:
-            m_res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={key}")
-            if m_res.status_code == 200:
-                for m in m_res.json().get("models", []):
-                    methods = m.get("supportedGenerationMethods", [])
-                    name = m.get("name", "")
-                    if "generateContent" in methods and "flash" in name.lower():
-                        candidate_models.append(name.replace("models/", ""))
-        except Exception:
-            pass
+    # Snelheidsoptimalisatie: Direct gemini-2.0-flash aanroepen zonder vertragende GET /models roundtrip
+    candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
 
-        for fallback in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]:
-            if fallback not in candidate_models:
-                candidate_models.append(fallback)
-
+    async with httpx.AsyncClient(timeout=25.0) as client:
         for model_name in candidate_models:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             try:
@@ -431,21 +369,13 @@ Retourneer ALLEEN een geldige JSON array:
             content={"detail": "Geen kaartgegevens kunnen structureren uit het antwoord."}
         )
 
-    async with httpx.AsyncClient() as cm_client:
-        # Stap 1: Parallel zoeken naar Laagste CM NL en TCGdex data
-        tasks_cm_nl = [
-            query_cardmarket_live_nl(cm_client, c.get("cardName", ""), str(c.get("cardNumber", "")))
+    # Snelle parallelle bevraging van TCGdex (binnen 200ms)
+    async with httpx.AsyncClient() as dex_client:
+        tasks = [
+            query_tcgdex(dex_client, c.get("setCode", ""), c.get("cardName", ""), str(c.get("cardNumber", "")))
             for c in cards_data
         ]
-        tasks_tcgdex = [
-            query_tcgdex(cm_client, c.get("setCode", ""), c.get("cardName", ""), str(c.get("cardNumber", "")))
-            for c in cards_data
-        ]
-
-        cm_nl_results, tcgdex_results = await asyncio.gather(
-            asyncio.gather(*tasks_cm_nl, return_exceptions=True),
-            asyncio.gather(*tasks_tcgdex, return_exceptions=True)
-        )
+        tcgdex_results = await asyncio.gather(*tasks, return_exceptions=True)
 
     results = []
     for idx, c in enumerate(cards_data):
@@ -460,9 +390,6 @@ Retourneer ALLEEN een geldige JSON array:
             resolved_set_name = SET_CODE_MAP[set_code]["name"]
 
         ai_price = float(c.get("marketEstimateEUR") or 2.50)
-
-        # Resultaten uit externe checks
-        live_nl_price = cm_nl_results[idx] if (idx < len(cm_nl_results) and isinstance(cm_nl_results[idx], (int, float))) else None
         tcgdex_data = tcgdex_results[idx] if (idx < len(tcgdex_results) and isinstance(tcgdex_results[idx], dict)) else None
 
         low_price_eur = None
@@ -475,27 +402,22 @@ Retourneer ALLEEN een geldige JSON array:
         else:
             target_url = get_base_cardmarket_url(card_name, card_num)
 
-            # PRIORITEIT 1: Lowest Cardmarket in NL
-            if live_nl_price and live_nl_price > 0.15:
-                final_price = live_nl_price
-                low_price_eur = live_nl_price
-                price_source = "Cardmarket NL Bodem (Laagste NL)"
-            # PRIORITEIT 2: Cardmarket Low via TCGdex
-            elif tcgdex_data and tcgdex_data.get("low"):
+            # PRIORITEIT 1: Officiële Cardmarket Bodem (Low) via TCGdex
+            if tcgdex_data and tcgdex_data.get("low"):
                 final_price = tcgdex_data["low"]
                 low_price_eur = tcgdex_data["low"]
                 avg30_eur = tcgdex_data.get("avg30")
-                price_source = "Cardmarket Bodem (EU Laagste)"
+                price_source = "Cardmarket Bodemprijs"
                 if tcgdex_data.get("official_set"):
                     resolved_set_name = tcgdex_data["official_set"]
-            # PRIORITEIT 3: Cardmarket Trend
+            # PRIORITEIT 2: Cardmarket Trend
             elif tcgdex_data and tcgdex_data.get("trend"):
                 final_price = tcgdex_data["trend"]
                 avg30_eur = tcgdex_data.get("avg30")
                 price_source = "Cardmarket Trend (Geverifieerd)"
                 if tcgdex_data.get("official_set"):
                     resolved_set_name = tcgdex_data["official_set"]
-            # PRIORITEIT 4: Gekalibreerde Conservatieve Richtprijs
+            # PRIORITEIT 3: Gekalibreerde Richtprijs
             else:
                 final_price = ai_price
                 price_source = "Cardmarket NL Richtprijs"
@@ -518,7 +440,7 @@ Retourneer ALLEEN een geldige JSON array:
             "certUrl": cert_verification_url,
             "condition": c.get("condition", "Near Mint (NM)"),
             "basePriceNM": round(final_price, 2),
-            "estimatedPriceEUR": round(final_price, 2),
+            "currentPrice": round(final_price, 2),
             "lowPriceEUR": round(low_price_eur, 2) if low_price_eur else None,
             "avg30EUR": round(avg30_eur, 2) if avg30_eur else None,
             "directMarketUrl": target_url,
