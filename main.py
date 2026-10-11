@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="BRIMI Fast Precision Engine", version="12.2.0")
+app = FastAPI(title="BRIMI Fast Precision Engine", version="12.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -155,7 +155,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
         for try_num in [raw_num, clean_num]:
             url = f"https://api.tcgdex.net/v2/en/sets/{set_id}/{try_num}"
             try:
-                res = await client.get(url, timeout=1.8)
+                res = await client.get(url, timeout=2.0)
                 if res.status_code == 200:
                     detail = res.json()
                     cm = detail.get("pricing", {}).get("cardmarket", {})
@@ -179,7 +179,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
         search_q = clean_name or card_name
         try:
             url = f"https://api.tcgdex.net/v2/en/cards?name={urllib.parse.quote_plus(search_q)}"
-            res = await client.get(url, timeout=1.6)
+            res = await client.get(url, timeout=2.0)
             if res.status_code == 200:
                 cands = res.json()
                 if isinstance(cands, list):
@@ -188,7 +188,7 @@ async def query_tcgdex(client: httpx.AsyncClient, set_code: str, card_name: str,
                         if cand_local in [clean_num, raw_num] or clean_card_number(cand_local) == clean_num:
                             card_id = cand.get("id")
                             if card_id:
-                                d_res = await client.get(f"https://api.tcgdex.net/v2/en/cards/{card_id}", timeout=1.6)
+                                d_res = await client.get(f"https://api.tcgdex.net/v2/en/cards/{card_id}", timeout=2.0)
                                 if d_res.status_code == 200:
                                     detail = d_res.json()
                                     cm = detail.get("pricing", {}).get("cardmarket", {})
@@ -268,7 +268,7 @@ def health_check():
     keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
     return {
         "status": "online",
-        "engine": "BRIMI Fast Precision Engine 12.2 (Multi-Key Rotation + TCGdex)",
+        "engine": "BRIMI Fast Precision Engine 12.3 (Header Auth + AQ/AIza Multi-Key)",
         "configured_keys_count": len(keys)
     }
 
@@ -294,13 +294,13 @@ Je bent een officiële Pokémon TCG OCR-analist. Analyseer alle officiële Poké
 BELANGRIJKE INSTRUCTIE VOOR 30TH CELEBRATION (30C) & ZELDZAAMHEDEN:
 - Kaarten met setcode "30C" of 30-jaar stempel zijn 100% OFFICIËLE kaarten uit de "30th Celebration" set. NOOIT "Custom" of "Fan Art"!
 - ONDERSCHEID REGULIERE ILLUSTRATION RARES STRIKT VAN SPECIAL ILLUSTRATION RARES (SIR):
-  * Illustration Rare (IR) zoals Alolan Exeggutor 129/128, Drifloon, Goldeen etc. hebben een reële Cardmarket marktwaarde van slechts € 2.00 tot € 3.50! Schat deze NOOIT op € 35!
+  * Illustration Rare (IR) zoals Alolan Exeggutor 129/128, Drifloon, Dewgong etc. hebben een reële Cardmarket marktwaarde van slechts € 2.00 tot € 3.50! Schat deze NOOIT op € 35!
   * Alleen echte top-chase Special Illustration Rares (SIR) zoals Pikachu ex 149/128 zijn circa € 65.00 tot € 75.00.
   * Reguliere ex / GX / V kaarten zijn circa € 1.00 tot € 2.00.
   * Holo / Reverse Holo / Commons zijn € 0.20 tot € 0.80.
 
 Lees voor ELKE kaart nauwkeurig:
-1. cardName: Officiële kaartnaam (bijv. "Alolan Exeggutor", "Pikachu ex", "Naganadel-GX", "Goldeen").
+1. cardName: Officiële kaartnaam (bijv. "Dewgong", "Alolan Exeggutor", "Pikachu ex", "Naganadel-GX").
 2. cardNumber: Nummer vóór de slash (bijv. "129", "149", "064").
 3. setTotal: Nummer ná de slash (bijv. "128", "064").
 4. setCode: Setcode linksonder (bijv. 30C, MEW, UNM, OBF, PAL, PAR, CRZ).
@@ -312,7 +312,7 @@ Lees voor ELKE kaart nauwkeurig:
 10. gradingCompany: "PSA", "CGC", "BGS" of null.
 11. grade: Cijfer op het label (bijv. "9", "10") of null.
 12. certNumber: Serienummer van het label of null.
-13. marketEstimateEUR: Realistische conservatieve Cardmarket bodem/richtprijs in EUR (bijv. 2.40 voor Alolan Exeggutor 129/128, 68.00 voor Pikachu ex 149/128 SIR).
+13. marketEstimateEUR: Realistische conservatieve Cardmarket bodem/richtprijs in EUR (bijv. 2.20 voor Dewgong, 2.40 voor Alolan Exeggutor, 68.00 voor Pikachu ex SIR).
 
 Retourneer ALLEEN een geldige JSON array.
 """
@@ -347,21 +347,24 @@ Retourneer ALLEEN een geldige JSON array.
     raw_text = ""
     last_error = ""
 
-    # Verschillende modellen met eigen quotapools
     candidate_models = [
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
-        "gemini-2.5-flash",
-        "gemini-flash-latest"
+        "gemini-2.5-flash"
     ]
 
-    async with httpx.AsyncClient(timeout=25.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         for key_idx, key in enumerate(api_keys):
-            key_exhausted = False
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": key
+            }
+            key_dead = False
+
             for model_name in candidate_models:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
                 try:
-                    res = await client.post(url, json=gemini_body)
+                    res = await client.post(url, json=gemini_body, headers=headers)
                     if res.status_code == 200:
                         data = res.json()
                         cands = data.get("candidates", [])
@@ -377,9 +380,13 @@ Retourneer ALLEEN een geldige JSON array.
                             feedback = data.get("promptFeedback", {})
                             block_r = feedback.get("blockReason", "Geen kandidaten")
                             last_error = f"{model_name}: Geblokkeerd ({block_r})"
+                    elif res.status_code in (401, 403):
+                        last_error = f"Sleutel {key_idx + 1} ongeldig of geen rechten (HTTP {res.status_code})"
+                        key_dead = True
+                        break
                     elif res.status_code == 429:
                         last_error = f"Sleutel {key_idx + 1} limiet bereikt (HTTP 429)"
-                        key_exhausted = True
+                        key_dead = True
                         break
                     elif res.status_code == 503:
                         last_error = f"{model_name} tijdelijk overbelast (HTTP 503)"
@@ -392,11 +399,11 @@ Retourneer ALLEEN een geldige JSON array.
                             err_msg = res.text[:120]
                         last_error = f"{model_name} (HTTP {res.status_code}: {err_msg})"
                 except Exception as e:
-                    last_error = f"{model_name} Network Error: {str(e)}"
+                    last_error = f"{model_name} ({type(e).__name__}: {str(e) or 'timeout'})"
 
             if raw_text:
                 break
-            if not key_exhausted and not raw_text:
+            if key_dead:
                 continue
 
     if not raw_text:
