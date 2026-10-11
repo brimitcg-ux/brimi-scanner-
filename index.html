@@ -121,7 +121,7 @@
 
     <div class="relative z-10 w-full max-w-xl mx-auto px-4 py-5 sm:py-7 space-y-6">
 
-        <!-- Top Navigatie Bar met BRIMI Pokéball Icoon -->
+        <!-- Top Navigatie Bar -->
         <header class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
                 <div class="w-11 h-11 rounded-2xl bg-brand-surface border border-brand-border flex items-center justify-center shadow-lg relative overflow-hidden group">
@@ -160,7 +160,7 @@
             </h2>
         </div>
 
-        <!-- Echte native file input gekoppeld aan label -->
+        <!-- File input -->
         <input type="file" id="file-input" accept="image/*" class="sr-only">
 
         <!-- Scanner Viewfinder Card -->
@@ -199,7 +199,7 @@
             </label>
         </div>
 
-        <!-- Scanning State Box (Dynamische Voortgangsteksten) -->
+        <!-- Scanning State Box -->
         <div id="scanning-state" class="hidden agency-card rounded-2xl p-5 border-brand-mint/30 space-y-3">
             <div class="flex items-center justify-between text-xs">
                 <span id="status-title" class="font-extrabold text-brand-mint flex items-center gap-2">
@@ -245,17 +245,14 @@
                 </span>
 
                 <div class="flex items-center gap-2">
-                    <!-- Bulk Kopiëren Knop -->
                     <button id="bulk-copy-btn" class="hidden text-xs bg-brand-surface text-brand-textMuted hover:text-white border border-brand-border hover:border-brand-mint/50 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1.5">
                         <i class="fa-regular fa-copy"></i>
                         <span>Kopieer Alles</span>
                     </button>
-                    <!-- Bulk WhatsApp Knop -->
                     <button id="bulk-whatsapp-btn" class="hidden text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1.5">
                         <i class="fa-brands fa-whatsapp"></i>
                         <span>Bied Alles Aan</span>
                     </button>
-                    <!-- Nieuwe Scan Knop -->
                     <button id="reset-btn" class="text-xs text-brand-textMuted hover:text-white bg-brand-surface border border-brand-border px-3.5 py-1.5 rounded-full font-bold transition flex items-center gap-1.5">
                         <i class="fa-solid fa-rotate-left"></i>
                         <span>Nieuwe Scan</span>
@@ -279,9 +276,9 @@
                         <i class="fa-solid fa-bolt"></i>
                     </div>
                     <div class="space-y-1">
-                        <h4 class="text-sm font-extrabold text-white">Cardmarket NL Bodemprijzen Eerst</h4>
+                        <h4 class="text-sm font-extrabold text-white">Cardmarket NL Koersen Eerst</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Geeft direct de laagste actuele vraagprijs van Nederlandse verkopers op Cardmarket.
+                            Geeft direct de actuele trend- en verkoopkoersen van Cardmarket NL.
                         </p>
                     </div>
                 </div>
@@ -293,7 +290,7 @@
                     <div class="space-y-1">
                         <h4 class="text-sm font-extrabold text-white">PriceCharting Slabs & Certificaat-check</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Herkent PSA-, CGC- en BGS-labels en verifieert direct het certificaatnummer bij het gradingbedrijf.
+                            Echte veilingdata per grade (PSA 9 / 10 / CGC) direct van PriceCharting in Euro's.
                         </p>
                     </div>
                 </div>
@@ -346,7 +343,7 @@
         let currentCards = [];
         let lastProcessedBase64 = null;
 
-        // Achtergrond ping bij openen van de pagina
+        // Achtergrond ping
         fetch(`${API_BASE}/`, { method: 'GET', cache: 'no-store' }).catch(() => {});
 
         fileInput.addEventListener('change', (e) => {
@@ -360,7 +357,6 @@
             resultsPanel.classList.add('hidden');
             retryBox.classList.add('hidden');
 
-            // Stap 1 voortgang
             statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Foto optimaliseren...`;
             statusSubtitle.textContent = "Foto comprimeren voor snelle upload...";
             progressBar.style.width = "20%";
@@ -374,8 +370,6 @@
                 const canvas = document.createElement('canvas');
                 let w = img.naturalWidth || img.width;
                 let h = img.naturalHeight || img.height;
-                
-                // Quick-Win C: 800px max dimensie voor 60% lichtere payload
                 const maxDim = 800;
 
                 if (w > maxDim || h > maxDim) {
@@ -393,7 +387,6 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
 
-                // Quick-Win C: 0.70 jpeg compressie (licht & vlijmscherp voor OCR)
                 const compressed = canvas.toDataURL('image/jpeg', 0.70);
                 imageDisplay.src = compressed;
                 lastProcessedBase64 = compressed.split(',')[1];
@@ -411,17 +404,15 @@
         });
 
         async function executeScan(base64Data) {
-            // Stap 2 voortgang: AI OCR
-            statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Kaart & Nummer herkennen...`;
-            statusSubtitle.textContent = "AI identificeert kaartnummer en setcode...";
+            statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Kaart & Slab herkennen...`;
+            statusSubtitle.textContent = "AI identificeert kaartnummer, grader en setcode...";
             progressBar.style.width = "50%";
 
-            // Stap 3 voortgang: TCGdex & beurskoersen na 800ms
             const progressTimer = setTimeout(() => {
-                statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Cardmarket koers ophalen...`;
-                statusSubtitle.textContent = "Officiële beurskoersen en bodemprijzen raadplegen...";
+                statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Marktprijzen ophalen...`;
+                statusSubtitle.textContent = "PriceCharting en Cardmarket NL raadplegen...";
                 progressBar.style.width = "85%";
-            }, 800);
+            }, 750);
 
             try {
                 const response = await fetch(`${API_BASE}/api/scan`, {
@@ -450,7 +441,6 @@
                 const data = await response.json();
                 progressBar.style.width = "100%";
 
-                // Haptische feedback (Trillen bij succesvolle herkenning op mobiel)
                 if (navigator.vibrate) {
                     try { navigator.vibrate(50); } catch(e) {}
                 }
@@ -492,7 +482,7 @@
             }
 
             let mappedCards = cards.map((c, i) => {
-                const realPrice = parseFloat(c.currentPrice ?? c.basePriceNM ?? c.lowPriceEUR ?? 2.5);
+                const realPrice = parseFloat(c.currentPrice ?? c.basePriceNM ?? c.estimatedPriceEUR ?? 0.0);
                 return {
                     id: i,
                     name: c.cardName || 'Pokémon Kaart',
@@ -514,13 +504,12 @@
                     lowPriceEUR: c.lowPriceEUR ? parseFloat(c.lowPriceEUR) : null,
                     avg30EUR: c.avg30EUR ? parseFloat(c.avg30EUR) : null,
                     marketUrl: c.directMarketUrl || '#',
-                    priceSource: c.priceSource || 'Cardmarket NL'
+                    priceSource: c.priceSource || 'Marktprijs'
                 };
             });
 
-            // Verbetering 2: Automatisch sorteren op waarde (duurste kaart bovenaan)
+            // Sorteren op waarde (bekende prijzen bovenaan)
             mappedCards.sort((a, b) => b.currentPrice - a.currentPrice);
-            // Re-index na sorteren
             currentCards = mappedCards.map((c, idx) => ({ ...c, id: idx }));
 
             cardCounter.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${currentCards.length} KAART${currentCards.length > 1 ? 'EN' : ''} GEVONDEN`;
@@ -549,8 +538,9 @@
             const numLabel = card.setTotal ? `${card.number}/${card.setTotal}` : `${card.number}`;
             const setCodeLabel = card.setCode ? `${card.setCode} ` : '';
             const certLine = (card.isGraded && card.certNumber) ? `\n🏷️ Certificaat: #${card.certNumber}` : '';
+            const priceText = card.currentPrice > 0 ? `€ ${card.currentPrice.toFixed(2)}` : `Bieden / Nader overeen te komen`;
 
-            return `Hey community! 👋\n\nHierbij bied ik mijn kaart aan:\n\n🃏 ${card.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${card.setName}\n🌐 Taal: ${flag} ${card.language}\n✨ Conditie: ${card.condition}${certLine}\n💶 Prijs: € ${card.currentPrice.toFixed(2)}\n\nStuur gerust een berichtje bij interesse! 🤝`;
+            return `Hey community! 👋\n\nHierbij bied ik mijn kaart aan:\n\n🃏 ${card.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${card.setName}\n🌐 Taal: ${flag} ${card.language}\n✨ Conditie: ${card.condition}${certLine}\n💶 Prijs: ${priceText}\n\nStuur gerust een berichtje bij interesse! 🤝`;
         }
 
         function renderSingleCard(card) {
@@ -609,12 +599,16 @@
             const marketBtnIcon = card.isGraded ? 'fa-chart-line' : 'fa-arrow-up-right-from-square';
             const marketBtnText = card.isGraded ? 'Bekijk PriceCharting Koers' : 'Bekijk op Cardmarket NL';
 
-            const isBodem = card.priceSource.includes("Bodem");
-            const sourceBadgeColor = isBodem
-                ? "text-brand-mint bg-brand-mint/10 border-brand-mint/30" 
-                : (card.isGraded ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-brand-cyan bg-brand-cyan/10 border-brand-cyan/20");
+            const isManual = card.priceSource.includes("Handmatig");
+            const sourceBadgeColor = isManual
+                ? "text-amber-400 bg-amber-500/10 border-amber-500/30"
+                : (card.isGraded ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-brand-mint bg-brand-mint/10 border-brand-mint/30");
 
-            const priceTitle = card.isGraded ? 'Slab Koers' : (isBodem ? 'Cardmarket Bodem' : 'Richtprijs');
+            const priceTitle = card.isGraded ? 'Slab Koers' : (isManual ? 'Prijs Invoeren' : 'Marktprijs');
+
+            const priceDisplay = card.currentPrice > 0 
+                ? `€ ${card.currentPrice.toFixed(2)}`
+                : `Handmatig invoeren ✏️`;
 
             cardEl.innerHTML = `
                 <div class="flex items-start justify-between gap-3">
@@ -644,8 +638,8 @@
                             ${priceTitle}
                         </p>
                         <div onclick="editCardPrice(${card.id})" class="inline-flex items-center gap-1.5 cursor-pointer group bg-brand-surface/80 hover:bg-brand-surface border border-brand-border hover:border-brand-mint/50 px-3 py-1.5 rounded-2xl transition">
-                            <span class="text-base font-black text-brand-mint" id="price-val-${card.id}">
-                                € ${card.currentPrice.toFixed(2)}
+                            <span class="text-base font-black ${card.currentPrice > 0 ? 'text-brand-mint' : 'text-amber-400 text-xs'}" id="price-val-${card.id}">
+                                ${priceDisplay}
                             </span>
                             <i class="fa-solid fa-pen text-[10px] text-brand-textMuted group-hover:text-brand-mint transition"></i>
                         </div>
@@ -677,7 +671,6 @@
                     </a>` : ''}
 
                     <div class="grid grid-cols-2 gap-2">
-                        <!-- Verbetering 1: Kopieer tekst knop -->
                         <button onclick="copySingleCardText(${card.id})" id="copy-btn-${card.id}" class="py-3 rounded-full bg-brand-surface border border-brand-border hover:border-brand-mint text-white font-extrabold text-xs transition flex items-center justify-center gap-2 active:scale-[0.99]">
                             <i class="fa-regular fa-copy text-brand-mint"></i>
                             <span id="copy-label-${card.id}">Kopieer Tekst</span>
@@ -699,10 +692,15 @@
             if (!card) return;
 
             card.condition = conditionName;
-            card.currentPrice = Math.round((card.basePriceNM * factor) * 100) / 100;
+            if (card.basePriceNM > 0) {
+                card.currentPrice = Math.round((card.basePriceNM * factor) * 100) / 100;
+            }
 
             const priceEl = document.getElementById(`price-val-${cardId}`);
-            if (priceEl) priceEl.textContent = `€ ${card.currentPrice.toFixed(2)}`;
+            if (priceEl && card.currentPrice > 0) {
+                priceEl.textContent = `€ ${card.currentPrice.toFixed(2)}`;
+                priceEl.className = "text-base font-black text-brand-mint";
+            }
 
             const condLabel = document.getElementById(`cond-label-${cardId}`);
             if (condLabel) condLabel.textContent = conditionName;
@@ -722,13 +720,18 @@
             const card = currentCards.find(c => c.id === cardId);
             if (!card) return;
 
-            const input = prompt(`Vul de nieuwe vraagprijs in voor ${card.name}:`, card.currentPrice.toFixed(2));
+            const currentStr = card.currentPrice > 0 ? card.currentPrice.toFixed(2) : "";
+            const input = prompt(`Vul de vraagprijs in voor ${card.name}:`, currentStr);
             if (input !== null) {
                 const cleaned = parseFloat(input.replace(',', '.'));
                 if (!isNaN(cleaned) && cleaned >= 0) {
                     card.currentPrice = Math.round(cleaned * 100) / 100;
+                    card.basePriceNM = card.currentPrice;
                     const priceEl = document.getElementById(`price-val-${cardId}`);
-                    if (priceEl) priceEl.textContent = `€ ${card.currentPrice.toFixed(2)}`;
+                    if (priceEl) {
+                        priceEl.textContent = `€ ${card.currentPrice.toFixed(2)}`;
+                        priceEl.className = "text-base font-black text-brand-mint";
+                    }
                 }
             }
         };
@@ -763,7 +766,8 @@
                 const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${c.number}`;
                 const setCodeLabel = c.setCode ? `${c.setCode} ` : '';
                 const certLine = (c.isGraded && c.certNumber) ? `\n🏷️ Cert: #${c.certNumber}` : '';
-                return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}${certLine}\n💶 Prijs: € ${c.currentPrice.toFixed(2)}`;
+                const priceText = c.currentPrice > 0 ? `€ ${c.currentPrice.toFixed(2)}` : `Bieden`;
+                return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}${certLine}\n💶 Prijs: ${priceText}`;
             }).join('\n\n');
 
             const text = `Hey community! 👋\n\nHierbij bied ik mijn kaarten aan:\n\n${cardList}\n\nStuur gerust een berichtje bij interesse! 🤝`;
@@ -784,7 +788,8 @@
                 const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${c.number}`;
                 const setCodeLabel = c.setCode ? `${c.setCode} ` : '';
                 const certLine = (c.isGraded && c.certNumber) ? `\n🏷️ Cert: #${c.certNumber}` : '';
-                return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}${certLine}\n💶 Prijs: € ${c.currentPrice.toFixed(2)}`;
+                const priceText = c.currentPrice > 0 ? `€ ${c.currentPrice.toFixed(2)}` : `Bieden`;
+                return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}${certLine}\n💶 Prijs: ${priceText}`;
             }).join('\n\n');
 
             const text = `Hey community! 👋\n\nHierbij bied ik mijn kaarten aan:\n\n${cardList}\n\nStuur gerust een berichtje bij interesse! 🤝`;
