@@ -124,7 +124,7 @@
         <!-- Top Navigatie Bar -->
         <header class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <!-- Pokéball Logo in Agency kleurstijl -->
+                <!-- Pokéball Logo in Agency stijl -->
                 <div class="w-11 h-11 rounded-2xl bg-brand-surface border border-brand-border flex items-center justify-center shadow-lg relative overflow-hidden group">
                     <svg viewBox="0 0 40 40" class="w-7 h-7" fill="none">
                         <path d="M4 20C4 11.1634 11.1634 4 20 4C28.8366 4 36 11.1634 36 20H25.5C25.5 17.5 23.5 15.5 20 15.5C16.5 15.5 14.5 17.5 14.5 20H4Z" fill="url(#cyanGrad)"/>
@@ -221,14 +221,14 @@
             </p>
         </div>
 
-        <!-- Fout / Opnieuw proberen box (Zonder jargon) -->
+        <!-- Fout / Opnieuw proberen box -->
         <div id="retry-box" class="hidden agency-card rounded-2xl p-5 border-red-500/40 space-y-3">
             <div class="flex items-start gap-3">
                 <i class="fa-solid fa-triangle-exclamation text-red-400 text-lg mt-0.5"></i>
                 <div class="space-y-1">
                     <p class="text-sm font-bold text-white" id="retry-title">Scan Mislukt</p>
                     <p class="text-xs text-brand-textMuted font-medium leading-relaxed" id="retry-desc">
-                        Er kon geen verbinding worden gemaakt. Probeer het opnieuw.
+                        Er kon geen verbinding tot stand worden gebracht. Probeer het opnieuw.
                     </p>
                 </div>
             </div>
@@ -262,7 +262,7 @@
             <div id="cards-container" class="space-y-4"></div>
         </div>
 
-        <!-- Waarom BRIMI Scanner? (De 3 Blokken) -->
+        <!-- De 3 USP Blokken -->
         <div class="pt-4 space-y-3">
             <div class="space-y-1 px-1">
                 <p class="text-[11px] font-extrabold uppercase tracking-wider text-brand-mint">Waarom BRIMI Scanner?</p>
@@ -317,6 +317,9 @@
 
     <script>
         const API_BASE = "https://brimi-cardmarket-api.onrender.com";
+
+        // Stille voorverwarming van Render zodra de pagina in Safari laadt
+        fetch(`${API_BASE}/`).catch(() => {});
 
         const fileInput = document.getElementById('file-input');
         const dropZone = document.getElementById('drop-zone');
@@ -453,9 +456,7 @@
                 laserBeam.classList.add('hidden');
 
                 retryTitle.textContent = "Scan Mislukt";
-                retryDesc.textContent = error.message.includes('Load failed') || error.message.includes('fetch')
-                    ? "Er kon geen verbinding tot stand worden gebracht. Tik op opnieuw proberen om de scan te voltooien."
-                    : error.message;
+                retryDesc.textContent = "Er kon geen verbinding tot stand worden gebracht. Tik op opnieuw proberen om de scan te voltooien.";
                 retryBox.classList.remove('hidden');
             }
         }
@@ -688,7 +689,7 @@ Stuur gerust een berichtje bij interesse! 🤝`;
 
             let cardList = currentCards.map((c) => {
                 const flag = getFlag(c.languageCode);
-                const numLabel = c.setTotal ? `${card.number}/${card.setTotal}` : `${card.number}`;
+                const numLabel = c.setTotal ? `${c.number}/${c.setTotal}` : `${c.number}`;
                 const setCodeLabel = c.setCode ? `${c.setCode} ` : '';
                 return `🃏 ${c.name} (${setCodeLabel}${numLabel})\n📍 Serie: ${c.setName}\n🌐 Taal: ${flag} ${c.language}\n✨ Conditie: ${c.condition}\n💶 Prijs: € ${c.currentPrice.toFixed(2)}`;
             }).join('\n\n');
