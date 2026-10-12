@@ -14,7 +14,7 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brimi-backend")
 
-app = FastAPI(title="BRIMI Precision Scanner API", version="3.2.0")
+app = FastAPI(title="BRIMI Precision Scanner API", version="3.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,6 +47,7 @@ class CardResult(BaseModel):
     basePriceNM: float
     estimatedPriceEUR: float
     lowPriceEUR: Optional[float] = None
+    trendPriceEUR: Optional[float] = None
     avg30EUR: Optional[float] = None
     directMarketUrl: str
     priceSource: str
@@ -158,6 +159,7 @@ SET_CODE_MAP = {
 }
 
 # Live Cardmarket NL Catalogus voor 30th Celebration (2026)
+# Optie A: low (NL Bodem/Vraagprijs) is de leidende verkoopwaarde voor Nederlandse verzamelaars
 CELEBRATION_30TH_PRICES: Dict[str, Dict[str, Any]] = {
     "149": {
         "trend": 38.65, "low": 55.00, "avg30": 76.65,
@@ -227,7 +229,7 @@ def is_set_compatible(scanned_code: Optional[str], scanned_name: Optional[str], 
     return True
 
 def get_30th_celebration_price(card_number: str, card_name: str, rarity: str, is_graded: bool, grade: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Gegarandeerde Cardmarket NL marktprijzen voor 30th Celebration (30C)."""
+    """Gegarandeerde Cardmarket NL marktprijzen voor 30th Celebration (30C) - Optie A."""
     clean_num = str(card_number).strip().lstrip("0") or str(card_number).strip()
     raw_num = str(card_number).strip()
     c_name_lower = card_name.lower()
@@ -252,28 +254,32 @@ def get_30th_celebration_price(card_number: str, card_name: str, rarity: str, is
                 price = entry.get("psa9", round(entry["trend"] * 2.1, 2))
             return {
                 "price": price,
-                "low": None,
-                "avg30": None,
-                "source": f"PriceCharting (Grade {grade or '9'})"
-            }
-        else:
-            return {
-                "price": entry["trend"],
+                "trend": entry.get("trend"),
                 "low": entry.get("low"),
                 "avg30": entry.get("avg30"),
-                "source": "Cardmarket NL Trend"
+                "source": f"PriceCharting ({grade or '9'})"
+            }
+        else:
+            # Optie A: De actuele Nederlandse bodem/vraagprijs als leidende hoofdprijs
+            primary_price = entry.get("low") or entry.get("trend")
+            return {
+                "price": primary_price,
+                "trend": entry.get("trend"),
+                "low": entry.get("low"),
+                "avg30": entry.get("avg30"),
+                "source": "Cardmarket NL Vraagprijs"
             }
 
     # Dynamische fallback per zeldzaamheid voor eventuele andere 30th cards
     rarity_lower = (rarity or "").lower()
     if "special" in rarity_lower or "futuristic" in rarity_lower:
-        base_trend = 35.00
-        low = 45.00
-        avg30 = 60.00
+        base_trend = 38.00
+        low = 55.00
+        avg30 = 70.00
     elif "classic" in rarity_lower:
-        base_trend = 28.00
-        low = 35.00
-        avg30 = 42.00
+        base_trend = 30.00
+        low = 40.00
+        avg30 = 48.00
     elif "illustration" in rarity_lower:
         base_trend = 15.00
         low = 18.00
@@ -290,9 +296,9 @@ def get_30th_celebration_price(card_number: str, card_name: str, rarity: str, is
     if is_graded:
         g_str = str(grade or "9").lower()
         price = round(base_trend * (6.0 if "10" in g_str else 2.0), 2)
-        return {"price": price, "low": None, "avg30": None, "source": f"PriceCharting (Grade {grade or '9'})"}
+        return {"price": price, "trend": base_trend, "low": low, "avg30": avg30, "source": f"PriceCharting (Grade {grade or '9'})"}
     else:
-        return {"price": base_trend, "low": low, "avg30": avg30, "source": "Cardmarket NL Trend"}
+        return {"price": low, "trend": base_trend, "low": low, "avg30": avg30, "source": "Cardmarket NL Vraagprijs"}
 
 async def fetch_cardmarket_direct(client: httpx.AsyncClient, card_name: str, card_number: str) -> Optional[Dict[str, Any]]:
     clean_name = quote_plus(card_name.strip())
@@ -490,7 +496,6 @@ async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card
             candidate_sets.append(SET_CODE_MAP[c_code])
         candidate_sets.append(c_code)
 
-    # Directe id lookup (alleen met strikt compatibele sets)
     for cs in candidate_sets:
         for cid in [f"{cs}-{raw_num}", f"{cs}-{clean_num}", f"{cs}-{raw_num.zfill(3)}"]:
             try:
@@ -503,7 +508,6 @@ async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card
             except Exception:
                 pass
 
-    # Zoeken op naam in TCGdex met STRIKTE set-validatie
     try:
         clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', card_name).strip()
         search_url = f"https://api.tcgdex.net/v2/en/cards?name={quote_plus(clean_name)}"
@@ -651,7 +655,7 @@ def parse_ai_json(raw_text: str) -> List[Dict[str, Any]]:
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "3.2.0"}
+    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "3.3.0"}
 
 @app.post("/api/scan", response_model=List[CardResult])
 async def scan_cards(request: ScanRequest):
@@ -709,16 +713,18 @@ async def scan_cards(request: ScanRequest):
             resolved_set_name = c.get("setName") or "Onbekende Set"
 
         low_price_eur = None
+        trend_price_eur = None
         avg30_eur = None
         final_price = 0.0
         price_source = ""
         market_url = ""
 
-        # Pijplijn A: 30th Celebration (Gegarandeerde koersen)
+        # Pijplijn A: 30th Celebration (Optie A: Echte Nederlandse Vraagprijs/Bodem)
         if is_30th:
             celeb_data = get_30th_celebration_price(c_num_val, c_name_val, c_rarity_val, is_graded, c_grade_val)
             if celeb_data:
                 final_price = float(celeb_data["price"])
+                trend_price_eur = float(celeb_data["trend"]) if celeb_data.get("trend") else None
                 low_price_eur = float(celeb_data["low"]) if celeb_data.get("low") else None
                 avg30_eur = float(celeb_data["avg30"]) if celeb_data.get("avg30") else None
                 price_source = celeb_data["source"]
@@ -738,19 +744,22 @@ async def scan_cards(request: ScanRequest):
                 price_source = "PriceCharting (Handmatig Invoeren)"
                 market_url = generate_market_url(c_name_val, c_num_val, True, company, grade_val)
 
-        # Pijplijn C: Reguliere Singles (Cardmarket NL via TCGdex / Direct)
+        # Pijplijn C: Reguliere Singles (Cardmarket NL)
         else:
-            if cm_direct_data and (cm_direct_data.get("trend") or cm_direct_data.get("avg30")):
-                trend_val = cm_direct_data.get("trend") or cm_direct_data.get("avg30")
-                final_price = float(trend_val)
+            if cm_direct_data and (cm_direct_data.get("low") or cm_direct_data.get("trend")):
+                # Als Cardmarket NL direct reageert, is 'low' de directe Nederlandse bodemprijs
+                primary = cm_direct_data.get("low") or cm_direct_data.get("trend")
+                final_price = float(primary)
+                trend_price_eur = float(cm_direct_data.get("trend")) if cm_direct_data.get("trend") else None
                 avg30_eur = float(cm_direct_data.get("avg30")) if cm_direct_data.get("avg30") else None
                 low_price_eur = float(cm_direct_data.get("low")) if cm_direct_data.get("low") else None
-                price_source = "Cardmarket NL Trend"
+                price_source = "Cardmarket NL Vraagprijs"
                 market_url = cm_direct_data.get("cm_url") or generate_market_url(c_name_val, c_num_val, False, None, None)
 
             elif tcgdex_data and (tcgdex_data.get("trend") or tcgdex_data.get("avg30")):
                 trend_val = tcgdex_data.get("trend") or tcgdex_data.get("avg30")
                 final_price = float(trend_val)
+                trend_price_eur = float(trend_val)
                 avg30_eur = float(tcgdex_data.get("avg30")) if tcgdex_data.get("avg30") else None
                 low_price_eur = float(tcgdex_data.get("low")) if tcgdex_data.get("low") else None
                 price_source = "Cardmarket NL Trend"
@@ -798,6 +807,7 @@ async def scan_cards(request: ScanRequest):
             basePriceNM=final_price,
             estimatedPriceEUR=final_price,
             lowPriceEUR=low_price_eur,
+            trendPriceEUR=trend_price_eur,
             avg30EUR=avg30_eur,
             directMarketUrl=market_url,
             priceSource=price_source
