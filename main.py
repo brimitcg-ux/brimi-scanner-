@@ -14,7 +14,7 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brimi-backend")
 
-app = FastAPI(title="BRIMI Precision Scanner API", version="3.0.0")
+app = FastAPI(title="BRIMI Precision Scanner API", version="3.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -159,10 +159,10 @@ SET_CODE_MAP = {
 
 USD_TO_EUR_RATE = 1.08
 
-PC_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9"
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,nl;q=0.8"
 }
 
 def is_set_compatible(scanned_code: Optional[str], scanned_name: Optional[str], candidate_set_name: Optional[str], candidate_set_id: Optional[str]) -> bool:
@@ -187,31 +187,83 @@ def is_set_compatible(scanned_code: Optional[str], scanned_name: Optional[str], 
 
     return True
 
+async def fetch_cardmarket_direct(client: httpx.AsyncClient, card_name: str, card_number: str) -> Optional[Dict[str, Any]]:
+    """Voert direct dezelfde zoekopdracht uit als de gebruiker in Safari en leest live de koersen uit."""
+    clean_name = quote_plus(card_name.strip())
+    clean_num = quote_plus(str(card_number).strip())
+    search_url = f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={clean_name}+{clean_num}&sellerCountry=17&minCondition=2"
+
+    try:
+        resp = await client.get(search_url, headers=BROWSER_HEADERS, timeout=3.5, follow_redirects=True)
+        if resp.status_code == 200:
+            html = resp.text
+            final_url = str(resp.url)
+
+            # 1. Price Trend
+            trend = None
+            m_trend = re.search(r'Price Trend[\s\S]*?([\d]+(?:[.,]\d{2})?)\s*€', html, re.IGNORECASE)
+            if m_trend:
+                try:
+                    trend = float(m_trend.group(1).replace(",", "."))
+                except ValueError:
+                    pass
+
+            # 2. 30-days average
+            avg30 = None
+            m_avg = re.search(r'30-days average price[\s\S]*?([\d]+(?:[.,]\d{2})?)\s*€', html, re.IGNORECASE)
+            if m_avg:
+                try:
+                    avg30 = float(m_avg.group(1).replace(",", "."))
+                except ValueError:
+                    pass
+
+            # 3. From (Bodem van NL verkopers)
+            low = None
+            m_low = re.search(r'(?:From|Vanaf)[\s\S]*?([\d]+(?:[.,]\d{2})?)\s*€', html, re.IGNORECASE)
+            if m_low:
+                try:
+                    low = float(m_low.group(1).replace(",", "."))
+                except ValueError:
+                    pass
+
+            if trend or avg30 or low:
+                logger.info(f"Directe Cardmarket match gevonden: Trend €{trend}, 30d €{avg30}, Bodem €{low}")
+                return {
+                    "trend": trend,
+                    "avg30": avg30,
+                    "low": low,
+                    "cm_url": final_url
+                }
+    except Exception as ex:
+        logger.debug(f"Directe Cardmarket zoekslag niet geslaagd ({ex}), fallback volgt.")
+
+    return None
+
 def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Optional[float]:
     if not grade:
+        # Ungraded prijs: match specifiek de table cells of js-price zonder storing van de Highcharts assen
         patterns = [
-            r'id=["\'](?:used_price|ungraded-price|cib_price)["\'][^>]*>([\s\S]*?)</td>',
-            r'(?:Ungraded|Ongesorteerd)[\s\S]*?\$([\d,]+(?:\.\d{2})?)',
-            r'class=["\']price\s+used["\'][^>]*>\s*\$([\d,]+(?:\.\d{2})?)'
+            r'id=["\']used_price["\'][^>]*>[\s\S]*?\$?\s*([\d,]+(?:\.\d{2})?)',
+            r'<td[^>]*class=["\'][^"\']*used[^"\']*["\'][^>]*>[\s\S]*?<span[^>]*class=["\'][^"\']*js-price[^"\']*["\'][^>]*>\s*\$?\s*([\d,]+(?:\.\d{2})?)',
+            r'(?:Ungraded|Ongesorteerd)</td>[\s\S]*?\$?\s*([\d,]+(?:\.\d{2})?)',
+            r'class=["\'][^"\']*price\s+numeric\s+used[^"\']*["\'][^>]*>[\s\S]*?\$?\s*([\d,]+(?:\.\d{2})?)',
+            r'id=["\'](?:ungraded-price|cib_price)["\'][^>]*>[\s\S]*?\$?\s*([\d,]+(?:\.\d{2})?)'
         ]
         for pat in patterns:
             m = re.search(pat, html, re.IGNORECASE)
             if m:
-                raw_val = m.group(1)
-                p_match = re.search(r'([\d,]+(?:\.\d{2})?)', raw_val)
-                if p_match:
-                    try:
-                        val = float(p_match.group(1).replace(",", ""))
-                        if val > 0:
-                            return val
-                    except ValueError:
-                        pass
+                try:
+                    val = float(m.group(1).replace(",", ""))
+                    if val > 0:
+                        return val
+                except ValueError:
+                    pass
         return None
 
     grade_str = str(grade).strip().lower()
     target_ids = []
     if "10" in grade_str:
-        target_ids = ["grade-10-price", "graded_price", "manual_only_price"]
+        target_ids = ["grade-10-price", "manual_only_price", "graded_price"]
     elif "9.5" in grade_str:
         target_ids = ["grade-95-price", "cib_price"]
     elif "9" in grade_str:
@@ -220,24 +272,42 @@ def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Option
         target_ids = ["grade-9-price", "cib_price", "graded_price"]
 
     for tid in target_ids:
-        pattern = rf'id=["\']{tid}["\'][^>]*>([\s\S]*?)</td>'
+        pattern = rf'id=["\']{tid}["\'][^>]*>[\s\S]*?\$?\s*([\d,]+(?:\.\d{2})?)'
         match = re.search(pattern, html, re.IGNORECASE)
         if match:
-            p_match = re.search(r'\$\s*([\d,]+(?:\.\d{2})?)', match.group(1))
-            if p_match:
-                try:
-                    val = float(p_match.group(1).replace(",", ""))
-                    if val > 0:
-                        return val
-                except ValueError:
-                    pass
+            try:
+                val = float(match.group(1).replace(",", ""))
+                if val > 0:
+                    return val
+            except ValueError:
+                pass
 
     return None
 
 async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, card_number: str, set_name: Optional[str], grade: Optional[str]) -> Optional[Dict[str, Any]]:
     clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', card_name).strip()
     clean_num = str(card_number).strip().lstrip("0") or str(card_number).strip()
-    
+    slug_name = clean_name.lower().replace(" ", "-")
+
+    # Directe URL-poging (werkt 100% voor 30th celebration en populaire sets)
+    candidate_urls = []
+    if set_name and ("30" in str(set_name) or "Celebration" in str(set_name)):
+        candidate_urls.append(f"https://www.pricecharting.com/game/pokemon-30th-celebration/{slug_name}-{clean_num}")
+
+    for direct_url in candidate_urls:
+        try:
+            resp = await client.get(direct_url, headers=BROWSER_HEADERS, timeout=3.0, follow_redirects=True)
+            if resp.status_code == 200 and "/game/" in str(resp.url):
+                usd_price = extract_pricecharting_grade_price(resp.text, grade)
+                if usd_price and usd_price > 0:
+                    return {
+                        "price_eur": round(usd_price / USD_TO_EUR_RATE, 2),
+                        "price_usd": usd_price,
+                        "product_url": str(resp.url)
+                    }
+        except Exception:
+            pass
+
     search_queries = []
     if set_name and ("30" in str(set_name) or "Celebration" in str(set_name)):
         search_queries.append(f"{clean_name} {clean_num} 30th Celebration")
@@ -246,7 +316,7 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
     for search_q in search_queries:
         search_url = f"https://www.pricecharting.com/search-products?q={quote_plus(search_q)}&type=prices"
         try:
-            resp = await client.get(search_url, headers=PC_HEADERS, timeout=4.5, follow_redirects=True)
+            resp = await client.get(search_url, headers=BROWSER_HEADERS, timeout=4.0, follow_redirects=True)
             if resp.status_code != 200:
                 continue
 
@@ -256,9 +326,8 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
             if "/game/" in final_url:
                 usd_price = extract_pricecharting_grade_price(html_content, grade)
                 if usd_price and usd_price > 0:
-                    eur_price = round(usd_price / USD_TO_EUR_RATE, 2)
                     return {
-                        "price_eur": eur_price,
+                        "price_eur": round(usd_price / USD_TO_EUR_RATE, 2),
                         "price_usd": usd_price,
                         "product_url": final_url
                     }
@@ -272,13 +341,12 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
                         break
 
                 full_product_url = f"https://www.pricecharting.com{target_slug}"
-                prod_resp = await client.get(full_product_url, headers=PC_HEADERS, timeout=4.0)
+                prod_resp = await client.get(full_product_url, headers=BROWSER_HEADERS, timeout=3.5)
                 if prod_resp.status_code == 200:
                     usd_price = extract_pricecharting_grade_price(prod_resp.text, grade)
                     if usd_price and usd_price > 0:
-                        eur_price = round(usd_price / USD_TO_EUR_RATE, 2)
                         return {
-                            "price_eur": eur_price,
+                            "price_eur": round(usd_price / USD_TO_EUR_RATE, 2),
                             "price_usd": usd_price,
                             "product_url": full_product_url
                         }
@@ -485,7 +553,7 @@ def parse_ai_json(raw_text: str) -> List[Dict[str, Any]]:
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "3.0.0"}
+    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "3.1.0"}
 
 @app.post("/api/scan", response_model=List[CardResult])
 async def scan_cards(request: ScanRequest):
@@ -498,6 +566,7 @@ async def scan_cards(request: ScanRequest):
     results: List[CardResult] = []
 
     async with httpx.AsyncClient() as client:
+        cm_direct_tasks = []
         tcgdex_tasks = []
         pc_tasks = []
 
@@ -510,23 +579,26 @@ async def scan_cards(request: ScanRequest):
             is_gr = bool(c.get("isGraded", False))
 
             if is_gr:
-                pc_tasks.append(fetch_pricecharting_data(client, c_name, c_num, c_set_name, c_grade))
+                cm_direct_tasks.append(asyncio.sleep(0, result=None))
                 tcgdex_tasks.append(asyncio.sleep(0, result=None))
+                pc_tasks.append(fetch_pricecharting_data(client, c_name, c_num, c_set_name, c_grade))
             else:
+                # 3 parallelle bronnen voor maximale trefzekerheid
+                cm_direct_tasks.append(fetch_cardmarket_direct(client, c_name, c_num))
                 tcgdex_tasks.append(fetch_tcgdex_resilient(client, c_name, c_num, c_set, c_set_name))
-                # Parallel PriceCharting bevragen met setnaam als direct vangnet
                 pc_tasks.append(fetch_pricecharting_data(client, c_name, c_num, c_set_name, None))
 
+        cm_direct_results = await asyncio.gather(*cm_direct_tasks, return_exceptions=True)
         tcgdex_results = await asyncio.gather(*tcgdex_tasks, return_exceptions=True)
         pc_results = await asyncio.gather(*pc_tasks, return_exceptions=True)
 
     for i, c in enumerate(cards_data):
+        cm_direct_data = cm_direct_results[i] if (i < len(cm_direct_results) and isinstance(cm_direct_results[i], dict)) else None
         tcgdex_data = tcgdex_results[i] if (i < len(tcgdex_results) and isinstance(tcgdex_results[i], dict)) else None
         pc_data = pc_results[i] if (i < len(pc_results) and isinstance(pc_results[i], dict)) else None
         
         is_graded = bool(c.get("isGraded", False))
         
-        # Behoud altijd de echte setnaam (30th Celebration) als de setcode 30C is!
         raw_set_code = str(c.get("setCode", "")).strip().upper()
         if raw_set_code == "30C":
             resolved_set_name = "30th Celebration"
@@ -539,7 +611,7 @@ async def scan_cards(request: ScanRequest):
         price_source = ""
         market_url = ""
 
-        # Pijplijn 1: Graded Slabs
+        # Pijplijn 1: Graded Slabs (PSA / CGC / BGS)
         if is_graded:
             company = c.get("gradingCompany") or "Slab"
             grade_val = c.get("grade") or "9"
@@ -555,8 +627,17 @@ async def scan_cards(request: ScanRequest):
 
         # Pijplijn 2: Singles
         else:
-            # 1. Eerst controleren of TCGdex een echte Cardmarket Trend heeft (die matcht met de set!)
-            if tcgdex_data and (tcgdex_data.get("trend") or tcgdex_data.get("avg30")):
+            # 1. Heeft Cardmarket Direct live data teruggegeven?
+            if cm_direct_data and (cm_direct_data.get("trend") or cm_direct_data.get("avg30") or cm_direct_data.get("low")):
+                trend_val = cm_direct_data.get("trend") or cm_direct_data.get("avg30") or cm_direct_data.get("low")
+                final_price = float(trend_val)
+                avg30_eur = float(cm_direct_data.get("avg30")) if cm_direct_data.get("avg30") else None
+                low_price_eur = float(cm_direct_data.get("low")) if cm_direct_data.get("low") else None
+                price_source = "Cardmarket NL Trend"
+                market_url = cm_direct_data.get("cm_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
+
+            # 2. Heeft TCGdex een officiële Cardmarket Trend?
+            elif tcgdex_data and (tcgdex_data.get("trend") or tcgdex_data.get("avg30")):
                 trend_val = tcgdex_data.get("trend")
                 avg_val = tcgdex_data.get("avg30")
                 final_price = float(trend_val or avg_val)
@@ -567,13 +648,13 @@ async def scan_cards(request: ScanRequest):
                     resolved_set_name = tcgdex_data["official_set"]
                 market_url = tcgdex_data.get("cm_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
 
-            # 2. Heeft TCGdex niets relevants (bijv. gloednieuwe 30th set)? Neem direct PriceCharting!
+            # 3. Directe beurskoers via PriceCharting (Ungraded vangnet)
             elif pc_data and pc_data.get("price_eur"):
                 final_price = float(pc_data["price_eur"])
                 price_source = "PriceCharting Marktprijs"
-                market_url = generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
+                market_url = pc_data.get("product_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
 
-            # 3. Fallback naar handmatig invoeren
+            # 4. Fallback: Handmatig invoeren
             else:
                 final_price = 0.0
                 price_source = "Cardmarket NL (Handmatig Invoeren)"
