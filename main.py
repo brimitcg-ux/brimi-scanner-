@@ -14,7 +14,7 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brimi-backend")
 
-app = FastAPI(title="BRIMI Precision Scanner API", version="2.9.0")
+app = FastAPI(title="BRIMI Precision Scanner API", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -71,7 +71,7 @@ STRIKTE REGELS VOOR HERKENNING:
 1. KAARTNAAM: Lees letter voor letter de exacte Engelse naam linksboven op de kaart (bijv. "Pikachu ex", "Palafin", "Goldeen", "Dewgong", "Clauncher").
 2. KAARTNUMMER & TOTAAL: Kijk linksonder (of rechtsonder bij oudere sets) naar het exacte nummer en set-totaal, bijv. "149/128", "200/197", "087/084", "097/094" of "205/198".
 3. SETCODE & SETNAAM: Kijk linksonder naar de officiële code in het blokje:
-   - 30C = 30th Celebration (Anniversary)
+   - 30C = 30th Celebration (Anniversary 2026). Overschrijf dit NOOIT naar Mega Evolution!
    - PRE = Prismatic Evolutions
    - SSP = Surging Sparks
    - SCR = Stellar Crown
@@ -109,10 +109,9 @@ Geef ALTIJD en UITSLUITEND een geldige JSON-array terug:
 """
 
 SET_CODE_MAP = {
-    # 30th Anniversary & Special Sets
+    # 30th Anniversary & Special Sets (STRIKT GEEN ME01 / MEGA EVOLUTION HIERIN!)
     "30c": "30th", "30th": "30th", "cel30": "30th",
     "cel": "cel25", "cel25": "cel25",
-    "me01": "me01", "me1": "me01",
     # Scarlet & Violet
     "pre": "sv08.5", "sv8.5": "sv08.5",
     "ssp": "sv08", "sv8": "sv08",
@@ -166,9 +165,30 @@ PC_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9"
 }
 
+def is_set_compatible(scanned_code: Optional[str], scanned_name: Optional[str], candidate_set_name: Optional[str], candidate_set_id: Optional[str]) -> bool:
+    """Voorkomt catastrofale false-positives zoals 30th Celebration koppelen aan Mega Evolution."""
+    s_code = (scanned_code or "").strip().lower()
+    s_name = (scanned_name or "").strip().lower()
+    c_sname = (candidate_set_name or "").strip().lower()
+    c_sid = (candidate_set_id or "").strip().lower()
+
+    if "30" in s_code or "30" in s_name or "celebration" in s_name:
+        if "30" not in c_sname and "30" not in c_sid and "celebration" not in c_sname:
+            logger.info(f"Afwijzing match: {c_sname} ({c_sid}) past niet bij 30th Celebration!")
+            return False
+            
+    if "obf" in s_code or "obsidian" in s_name:
+        if "obsidian" not in c_sname and "sv03" not in c_sid:
+            return False
+            
+    if "pal" in s_code or "evolved" in s_name:
+        if "paldea" not in c_sname and "sv02" not in c_sid:
+            return False
+
+    return True
+
 def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Optional[float]:
     if not grade:
-        # Ungraded prijs zoeken via table id of label
         patterns = [
             r'id=["\'](?:used_price|ungraded-price|cib_price)["\'][^>]*>([\s\S]*?)</td>',
             r'(?:Ungraded|Ongesorteerd)[\s\S]*?\$([\d,]+(?:\.\d{2})?)',
@@ -218,9 +238,8 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
     clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', card_name).strip()
     clean_num = str(card_number).strip().lstrip("0") or str(card_number).strip()
     
-    # Zoektermen verfijnen (inclusief setnaam voor unieke sets zoals 30th Celebration)
     search_queries = []
-    if set_name and "30" in str(set_name):
+    if set_name and ("30" in str(set_name) or "Celebration" in str(set_name)):
         search_queries.append(f"{clean_name} {clean_num} 30th Celebration")
     search_queries.append(f"{clean_name} {clean_num}")
 
@@ -278,6 +297,7 @@ def parse_tcgdex_pricing(data: dict) -> Optional[Dict[str, Any]]:
     low = prices.get("low") or prices.get("low-holo")
     cm_url = data.get("cardmarket", {}).get("url") or cm.get("url")
     official_set = data.get("set", {}).get("name")
+    set_id = data.get("set", {}).get("id")
 
     if trend or avg30 or low:
         return {
@@ -285,16 +305,16 @@ def parse_tcgdex_pricing(data: dict) -> Optional[Dict[str, Any]]:
             "avg30": avg30,
             "low": low,
             "official_set": official_set,
+            "set_id": set_id,
             "cm_url": cm_url
         }
     return None
 
-async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card_number: str, set_code: Optional[str]) -> Optional[Dict[str, Any]]:
+async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card_number: str, set_code: Optional[str], set_name: Optional[str]) -> Optional[Dict[str, Any]]:
     clean_num = str(card_number).strip().lstrip("0") or str(card_number).strip()
     raw_num = str(card_number).strip()
     headers = {"Accept": "application/json"}
 
-    # Stap 1: Kandidaat set-IDs
     candidate_sets = []
     if set_code:
         c_code = set_code.strip().lower()
@@ -302,9 +322,9 @@ async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card
             candidate_sets.append(SET_CODE_MAP[c_code])
         candidate_sets.append(c_code)
         if "30" in c_code:
-            candidate_sets.extend(["30th", "30c", "me01", "m01"])
+            candidate_sets.extend(["30th", "30c", "cel30"])
 
-    # Directe id lookup
+    # Stap 1: Directe id lookup (alleen met strikt compatibele sets)
     for cs in candidate_sets:
         for cid in [f"{cs}-{raw_num}", f"{cs}-{clean_num}", f"{cs}-{raw_num.zfill(3)}"]:
             try:
@@ -312,12 +332,12 @@ async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card
                 resp = await client.get(url, headers=headers, timeout=2.5)
                 if resp.status_code == 200:
                     parsed = parse_tcgdex_pricing(resp.json())
-                    if parsed:
+                    if parsed and is_set_compatible(set_code, set_name, parsed.get("official_set"), parsed.get("set_id")):
                         return parsed
             except Exception:
                 pass
 
-    # Stap 2: Zoeken op naam in TCGdex
+    # Stap 2: Zoeken op naam in TCGdex met STRIKTE set-validatie
     try:
         clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', card_name).strip()
         search_url = f"https://api.tcgdex.net/v2/en/cards?name={quote_plus(clean_name)}"
@@ -333,32 +353,10 @@ async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card
                         card_resp = await client.get(full_card_url, headers=headers, timeout=2.5)
                         if card_resp.status_code == 200:
                             parsed = parse_tcgdex_pricing(card_resp.json())
-                            if parsed:
+                            if parsed and is_set_compatible(set_code, set_name, parsed.get("official_set"), parsed.get("set_id")):
                                 return parsed
     except Exception as ex:
         logger.warning(f"TCGdex zoekopdracht mislukt voor {card_name}: {ex}")
-
-    # Stap 3: Fallback via PokemonTCG.io
-    try:
-        ptcg_url = f"https://api.pokemontcg.io/v2/cards?q=name:\"{clean_name}\" number:\"{clean_num}\""
-        ptcg_resp = await client.get(ptcg_url, headers=headers, timeout=3.0)
-        if ptcg_resp.status_code == 200:
-            p_data = ptcg_resp.json().get("data", [])
-            if p_data:
-                first_card = p_data[0]
-                cm_data = first_card.get("cardmarket", {})
-                cm_prices = cm_data.get("prices", {})
-                trend_val = cm_prices.get("trendPrice") or cm_prices.get("averageSellPrice")
-                if trend_val or cm_prices.get("lowPrice"):
-                    return {
-                        "trend": trend_val,
-                        "avg30": cm_prices.get("avg30") or cm_prices.get("averageSellPrice"),
-                        "low": cm_prices.get("lowPrice"),
-                        "official_set": first_card.get("set", {}).get("name"),
-                        "cm_url": cm_data.get("url")
-                    }
-    except Exception as ex:
-        logger.warning(f"PokemonTCG.io fallback mislukt voor {card_name}: {ex}")
 
     return None
 
@@ -487,7 +485,7 @@ def parse_ai_json(raw_text: str) -> List[Dict[str, Any]]:
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "2.9.0"}
+    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "3.0.0"}
 
 @app.post("/api/scan", response_model=List[CardResult])
 async def scan_cards(request: ScanRequest):
@@ -515,8 +513,8 @@ async def scan_cards(request: ScanRequest):
                 pc_tasks.append(fetch_pricecharting_data(client, c_name, c_num, c_set_name, c_grade))
                 tcgdex_tasks.append(asyncio.sleep(0, result=None))
             else:
-                tcgdex_tasks.append(fetch_tcgdex_resilient(client, c_name, c_num, c_set))
-                # Voor singles: raadpleeg parallel PriceCharting met setnaam als betrouwbaar vangnet
+                tcgdex_tasks.append(fetch_tcgdex_resilient(client, c_name, c_num, c_set, c_set_name))
+                # Parallel PriceCharting bevragen met setnaam als direct vangnet
                 pc_tasks.append(fetch_pricecharting_data(client, c_name, c_num, c_set_name, None))
 
         tcgdex_results = await asyncio.gather(*tcgdex_tasks, return_exceptions=True)
@@ -527,7 +525,14 @@ async def scan_cards(request: ScanRequest):
         pc_data = pc_results[i] if (i < len(pc_results) and isinstance(pc_results[i], dict)) else None
         
         is_graded = bool(c.get("isGraded", False))
-        resolved_set_name = c.get("setName", "30th Celebration" if str(c.get("setCode", "")).upper() == "30C" else "Onbekende Set")
+        
+        # Behoud altijd de echte setnaam (30th Celebration) als de setcode 30C is!
+        raw_set_code = str(c.get("setCode", "")).strip().upper()
+        if raw_set_code == "30C":
+            resolved_set_name = "30th Celebration"
+        else:
+            resolved_set_name = c.get("setName") or "Onbekende Set"
+
         low_price_eur = None
         avg30_eur = None
         final_price = 0.0
@@ -548,8 +553,9 @@ async def scan_cards(request: ScanRequest):
                 price_source = "PriceCharting (Handmatig Invoeren)"
                 market_url = generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), True, company, grade_val)
 
-        # Pijplijn 2: Singles (Cardmarket NL via TCGdex & PokemonTCG met PriceCharting vangnet)
+        # Pijplijn 2: Singles
         else:
+            # 1. Eerst controleren of TCGdex een echte Cardmarket Trend heeft (die matcht met de set!)
             if tcgdex_data and (tcgdex_data.get("trend") or tcgdex_data.get("avg30")):
                 trend_val = tcgdex_data.get("trend")
                 avg_val = tcgdex_data.get("avg30")
@@ -557,21 +563,17 @@ async def scan_cards(request: ScanRequest):
                 avg30_eur = float(avg_val) if avg_val else None
                 low_price_eur = float(tcgdex_data.get("low")) if tcgdex_data.get("low") else None
                 price_source = "Cardmarket NL Trend"
-                if tcgdex_data.get("official_set"):
+                if tcgdex_data.get("official_set") and raw_set_code != "30C":
                     resolved_set_name = tcgdex_data["official_set"]
                 market_url = tcgdex_data.get("cm_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
-            elif tcgdex_data and tcgdex_data.get("low"):
-                final_price = float(tcgdex_data["low"])
-                low_price_eur = float(tcgdex_data["low"])
-                price_source = "Cardmarket Bodem"
-                if tcgdex_data.get("official_set"):
-                    resolved_set_name = tcgdex_data["official_set"]
-                market_url = tcgdex_data.get("cm_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
+
+            # 2. Heeft TCGdex niets relevants (bijv. gloednieuwe 30th set)? Neem direct PriceCharting!
             elif pc_data and pc_data.get("price_eur"):
-                # Eerste-dag release vangnet: PriceCharting beurskoers (€ 57,- voor Pikachu #149)
                 final_price = float(pc_data["price_eur"])
                 price_source = "PriceCharting Marktprijs"
-                market_url = pc_data.get("product_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
+                market_url = generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
+
+            # 3. Fallback naar handmatig invoeren
             else:
                 final_price = 0.0
                 price_source = "Cardmarket NL (Handmatig Invoeren)"
