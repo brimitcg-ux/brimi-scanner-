@@ -14,7 +14,7 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brimi-backend")
 
-app = FastAPI(title="BRIMI Universal Precision Scanner API", version="4.5.0")
+app = FastAPI(title="BRIMI Universal Precision Scanner API", version="4.6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,14 +54,17 @@ class CardResult(BaseModel):
 
 def get_api_keys() -> List[str]:
     raw_keys = os.getenv("GEMINI_API_KEY", "")
-    keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+    keys = [
+        k.strip().strip('"').strip("'") 
+        for k in raw_keys.split(",") 
+        if k.strip().strip('"').strip("'")
+    ]
     return keys
 
 CANDIDATE_MODELS = [
-    "gemini-2.0-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash"
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite"
 ]
 
 SYSTEM_PROMPT = """
@@ -353,7 +356,6 @@ def get_30th_celebration_price(card_number: str, card_name: str, rarity: str, is
             "source": "Cardmarket NL Vraagprijs"
         }
 
-    # Dynamische schatting voor overige 30th kaarten op basis van zeldzaamheid
     r_lower = rarity.lower()
     base_val = 45.00 if ("special" in r_lower or "sir" in r_lower) else (14.00 if "illustration" in r_lower else 4.50)
     if is_graded:
@@ -423,9 +425,8 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
 
 async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card_number: str, tcgdex_set_id: Optional[str], set_name: str) -> Optional[Dict[str, Any]]:
     clean_num = str(card_number).split("/")[0].strip()
-    headers = {"Accept": "application/json", "User-Agent": "BRIMI-Scanner/4.5"}
+    headers = {"Accept": "application/json", "User-Agent": "BRIMI-Scanner/4.6"}
 
-    # Poging 1: Directe set-ID + nummer query (bijv: sv03-200 of base1-4)
     if tcgdex_set_id:
         url_candidates = [
             f"https://api.tcgdex.net/v2/en/cards/{tcgdex_set_id}-{clean_num}",
@@ -494,7 +495,7 @@ async def call_gemini_vision(image_base64: str, mime_type: str) -> str:
             }
 
             for model_name in CANDIDATE_MODELS:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
                 try:
                     logger.info(f"Scan uitvoeren met sleutel {key_idx + 1} op model {model_name}...")
                     response = await client.post(url, headers=headers, json=payload)
@@ -518,11 +519,9 @@ async def call_gemini_vision(image_base64: str, mime_type: str) -> str:
                         last_error_msg = f"Sleutel {key_idx + 1} limiet bereikt (HTTP 429)"
                         logger.warning(last_error_msg)
                         break
-                    elif response.status_code in [404, 503]:
-                        last_error_msg = f"{model_name} ({response.status_code})"
-                        continue
                     else:
                         last_error_msg = f"{model_name} (HTTP {response.status_code})"
+                        logger.warning(f"Model {model_name} fout: {response.status_code} - {response.text[:150]}")
                 except Exception as ex:
                     last_error_msg = f"{model_name} Netwerkfout: {str(ex)}"
 
@@ -570,7 +569,7 @@ def read_root():
     return {
         "status": "online",
         "app": "BRIMI Universal Precision Scanner API",
-        "version": "4.5.0",
+        "version": "4.6.0",
         "matrix_sets": len(UNIVERSAL_SET_MATRIX)
     }
 
