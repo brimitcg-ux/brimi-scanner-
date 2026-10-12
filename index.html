@@ -276,9 +276,9 @@
                         <i class="fa-solid fa-bolt"></i>
                     </div>
                     <div class="space-y-1">
-                        <h4 class="text-sm font-extrabold text-white">Cardmarket NL Koersen Eerst</h4>
+                        <h4 class="text-sm font-extrabold text-white">Cardmarket NL Vraagprijzen</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Geeft direct de actuele trend- en verkoopkoersen van Cardmarket NL.
+                            Toont direct de echte actuele vraagprijs van Nederlandse verkopers in plaats van achterlopende koersen.
                         </p>
                     </div>
                 </div>
@@ -302,7 +302,7 @@
                     <div class="space-y-1">
                         <h4 class="text-sm font-extrabold text-white">1-Tik Community Aanbod</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Met één tik kant-en-klaar aanbieden in de WhatsApp groep inclusief gecertificeerde setnaam en vraagprijs.
+                            Met één tik kant-en-klaar aanbieden in de WhatsApp groep tegen de juiste Nederlandse marktprijs.
                         </p>
                     </div>
                 </div>
@@ -370,7 +370,6 @@
                 const canvas = document.createElement('canvas');
                 let w = img.naturalWidth || img.width;
                 let h = img.naturalHeight || img.height;
-                // Verhoogd naar 1400 voor haarscherpe OCR van kaartnamen en nummers
                 const maxDim = 1400;
 
                 if (w > maxDim || h > maxDim) {
@@ -388,7 +387,6 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
 
-                // Kwaliteit 0.85 voor kristalheldere tekstherkenning
                 const compressed = canvas.toDataURL('image/jpeg', 0.85);
                 imageDisplay.src = compressed;
                 lastProcessedBase64 = compressed.split(',')[1];
@@ -504,9 +502,10 @@
                     basePriceNM: realPrice,
                     currentPrice: realPrice,
                     lowPriceEUR: c.lowPriceEUR ? parseFloat(c.lowPriceEUR) : null,
+                    trendPriceEUR: c.trendPriceEUR ? parseFloat(c.trendPriceEUR) : null,
                     avg30EUR: c.avg30EUR ? parseFloat(c.avg30EUR) : null,
                     marketUrl: c.directMarketUrl || '#',
-                    priceSource: c.priceSource || 'Marktprijs'
+                    priceSource: c.priceSource || 'NL Vraagprijs'
                 };
             });
 
@@ -606,11 +605,22 @@
                 ? "text-amber-400 bg-amber-500/10 border-amber-500/30"
                 : (card.isGraded ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-brand-mint bg-brand-mint/10 border-brand-mint/30");
 
-            const priceTitle = card.isGraded ? 'Slab Koers' : (isManual ? 'Prijs Invoeren' : 'Marktprijs');
+            const priceTitle = card.isGraded ? 'Slab Koers' : (isManual ? 'Prijs Invoeren' : 'NL Vraagprijs');
 
             const priceDisplay = card.currentPrice > 0 
                 ? `€ ${card.currentPrice.toFixed(2)}`
                 : `Handmatig invoeren ✏️`;
+
+            // Substatistieken logica (Optie A: Toont Trend & 30d Gemiddelde)
+            let subStatsHTML = '';
+            if (card.trendPriceEUR && card.trendPriceEUR !== card.currentPrice) {
+                subStatsHTML += `<span>Trend: <strong class="text-white font-bold">€ ${card.trendPriceEUR.toFixed(2)}</strong></span>`;
+            }
+            if (card.avg30EUR) {
+                subStatsHTML += `<span>30d Gem: <strong class="text-white font-bold">€ ${card.avg30EUR.toFixed(2)}</strong></span>`;
+            } else if (card.lowPriceEUR && card.lowPriceEUR !== card.currentPrice) {
+                subStatsHTML += `<span>Bodem: <strong class="text-white font-bold">€ ${card.lowPriceEUR.toFixed(2)}</strong></span>`;
+            }
 
             cardEl.innerHTML = `
                 <div class="flex items-start justify-between gap-3">
@@ -653,8 +663,7 @@
                         <i class="fa-solid fa-circle-check text-[9px] mr-1"></i>${card.priceSource}
                     </span>
                     <div class="flex items-center gap-3 text-brand-textMuted font-medium text-[11px]">
-                        ${card.lowPriceEUR ? `<span>Bodem: <strong class="text-white font-bold">€ ${card.lowPriceEUR.toFixed(2)}</strong></span>` : ''}
-                        ${card.avg30EUR ? `<span>30d Gem: <strong class="text-white font-bold">€ ${card.avg30EUR.toFixed(2)}</strong></span>` : ''}
+                        ${subStatsHTML}
                     </div>
                 </div>
 
