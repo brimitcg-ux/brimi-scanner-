@@ -276,9 +276,9 @@
                         <i class="fa-solid fa-bolt"></i>
                     </div>
                     <div class="space-y-1">
-                        <h4 class="text-sm font-extrabold text-white">Cardmarket NL Vraagprijzen</h4>
+                        <h4 class="text-sm font-extrabold text-white">Cardmarket NL Laagste Vraagprijs</h4>
                         <p class="text-xs text-brand-textMuted font-medium leading-relaxed">
-                            Toont direct de echte actuele vraagprijs van Nederlandse verkopers in plaats van achterlopende koersen.
+                            Berekent de actuele bodemprijs van Nederlandse aanbieders voor Near Mint Engelse kaarten.
                         </p>
                     </div>
                 </div>
@@ -343,7 +343,6 @@
         let currentCards = [];
         let lastProcessedBase64 = null;
 
-        // Achtergrond ping
         fetch(`${API_BASE}/`, { method: 'GET', cache: 'no-store' }).catch(() => {});
 
         fileInput.addEventListener('change', (e) => {
@@ -409,8 +408,8 @@
             progressBar.style.width = "50%";
 
             const progressTimer = setTimeout(() => {
-                statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Marktprijzen ophalen...`;
-                statusSubtitle.textContent = "PriceCharting en Cardmarket NL raadplegen...";
+                statusTitle.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-brand-mint"></i> Nederlandse bodemprijs ophalen...`;
+                statusSubtitle.textContent = "Cardmarket NL en PriceCharting benchmark raadplegen...";
                 progressBar.style.width = "85%";
             }, 750);
 
@@ -505,11 +504,10 @@
                     trendPriceEUR: c.trendPriceEUR ? parseFloat(c.trendPriceEUR) : null,
                     avg30EUR: c.avg30EUR ? parseFloat(c.avg30EUR) : null,
                     marketUrl: c.directMarketUrl || '#',
-                    priceSource: c.priceSource || 'NL Vraagprijs'
+                    priceSource: c.priceSource || 'NL Laagste Vraagprijs'
                 };
             });
 
-            // Sorteren op waarde (bekende prijzen bovenaan)
             mappedCards.sort((a, b) => b.currentPrice - a.currentPrice);
             currentCards = mappedCards.map((c, idx) => ({ ...c, id: idx }));
 
@@ -605,13 +603,12 @@
                 ? "text-amber-400 bg-amber-500/10 border-amber-500/30"
                 : (card.isGraded ? "text-amber-400 bg-amber-500/10 border-amber-500/20" : "text-brand-mint bg-brand-mint/10 border-brand-mint/30");
 
-            const priceTitle = card.isGraded ? 'Slab Koers' : (isManual ? 'Prijs Invoeren' : 'NL Vraagprijs');
+            const priceTitle = card.isGraded ? 'Slab Koers' : (isManual ? 'Prijs Invoeren' : 'NL Laagste Vraagprijs');
 
             const priceDisplay = card.currentPrice > 0 
                 ? `€ ${card.currentPrice.toFixed(2)}`
                 : `Handmatig invoeren ✏️`;
 
-            // Substatistieken logica (Optie A: Toont Trend & 30d Gemiddelde)
             let subStatsHTML = '';
             if (card.trendPriceEUR && card.trendPriceEUR !== card.currentPrice) {
                 subStatsHTML += `<span>Trend: <strong class="text-white font-bold">€ ${card.trendPriceEUR.toFixed(2)}</strong></span>`;
