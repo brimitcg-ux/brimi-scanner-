@@ -14,7 +14,7 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brimi-backend")
 
-app = FastAPI(title="BRIMI Precision Scanner API", version="2.6.0")
+app = FastAPI(title="BRIMI Precision Scanner API", version="2.7.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,24 +64,24 @@ CANDIDATE_MODELS = [
 ]
 
 SYSTEM_PROMPT = """
-Je bent de geavanceerde, uiterst nauwkeurige visuele inspectie-engine van BRIMI Scanner voor Pokémon TCG.
-Analyseer de afbeelding uiterst scherp. De foto kan één losse kaart, een stapel kaarten of een graded slab (PSA, CGC, BGS, PCA) bevatten.
+Je bent de geavanceerde visuele inspectie-engine van BRIMI Scanner voor Pokémon TCG.
+Analyseer de afbeelding uiterst scherp. De foto kan één losse kaart, meerdere kaarten of een graded slab (PSA, CGC, BGS) bevatten.
 
 STRIKTE REGELS VOOR HERKENNING:
-1. KAARTNAAM: Lees letter voor letter de exacte naam linksboven op de kaart (bijv. "Goldeen", "Dewgong", "Clauncher", "Alolan Exeggutor", "Palafin"). Kijk ook naar de HP (bijv. 70 HP of 130 HP) en Stage om de identiteit te verifiëren. Verzin NOOIT een andere Pokémon!
-2. KAARTNUMMER & TOTAAL: Kijk linksonder (of rechtsonder bij oudere sets) naar het exacte nummer en totaal rond de schuine streep, bijv. "087/084" of "097/094" of "205/198" of "230/236". Neem zowel het lokale nummer als het set-totaal exact over.
-3. SETCODE: Kijk linksonder naar de afkorting in het witte/zwarte blokje (bijv. PFL, SVI, PAL, OBF, MEW, PR-SW). Als het niet met 100% zekerheid leesbaar is, zet dan null in plaats van te gokken.
-4. SLABS: Als de kaart in een plastic PSA/CGC/BGS slab zit, lees dan de grader, de officiële grade (bijv. 9 of 10) en het certificaatnummer van het bovenste label.
+1. KAARTNAAM: Lees letter voor letter de exacte Engelse naam linksboven op de kaart (bijv. "Palafin", "Goldeen", "Dewgong", "Clauncher").
+2. KAARTNUMMER & TOTAAL: Kijk linksonder (of rechtsonder bij oudere sets) naar het exacte nummer en set-totaal, bijv. "200/197", "087/084", "097/094" of "205/198".
+3. SETCODE: Kijk linksonder naar de officiële 3-lettercode in het blokje (bijv. OBF, PAL, SVI, MEW, PAR, PAF, TEF, TWM, SCR, SSP, PRE, UNM, CRZ).
+4. SLABS: Als de kaart in een plastic PSA/CGC/BGS slab zit, lees dan de grader, de officiële grade (bijv. 9 of 10) en het certificaatnummer.
 
 Geef ALTIJD en UITSLUITEND een geldige JSON-array terug:
 [
   {
     "cardName": "Exacte Engelse naam van de Pokémon / Trainer",
-    "cardNumber": "Nummer van de kaart, bijv. 087 of 205",
-    "setTotal": "Totaal aantal kaarten in set indien zichtbaar, bijv. 084 of 198 of null",
-    "setCode": "Setcode linksonder indien leesbaar, anders null",
-    "setName": "Officiële setnaam (bijv. Phantasmal Flames, Scarlet & Violet, Unified Minds)",
-    "language": "Engels, Japans, Chinees, etc.",
+    "cardNumber": "Nummer van de kaart, bijv. 200 of 087",
+    "setTotal": "Totaal aantal kaarten in set indien zichtbaar, bijv. 197 of null",
+    "setCode": "Setcode linksonder indien leesbaar (bijv. OBF, SVI), anders null",
+    "setName": "Officiële setnaam (bijv. Scarlet & Violet: Obsidian Flames)",
+    "language": "Engels, Japans, etc.",
     "languageCode": "EN, JP, CN, DE, FR",
     "rarity": "Illustration Rare, Special Illustration Rare, Ultra Rare, Common, etc.",
     "isGraded": false,
@@ -92,6 +92,53 @@ Geef ALTIJD en UITSLUITEND een geldige JSON-array terug:
 ]
 """
 
+# Officiële mapping van kaart-afkortingen naar TCGdex set-IDs
+SET_CODE_MAP = {
+    # Scarlet & Violet
+    "svi": "sv01", "sv1": "sv01",
+    "pal": "sv02", "sv2": "sv02",
+    "obf": "sv03", "sv3": "sv03",
+    "mew": "sv03.5", "151": "sv03.5",
+    "par": "sv04", "sv4": "sv04",
+    "paf": "sv04.5", "sv4.5": "sv04.5",
+    "tef": "sv05", "sv5": "sv05",
+    "twm": "sv06", "sv6": "sv06",
+    "sfa": "sv06.5", "sv6.5": "sv06.5",
+    "scr": "sv07", "sv7": "sv07",
+    "ssp": "sv08", "sv8": "sv08",
+    "pre": "sv08.5", "sv8.5": "sv08.5",
+    # Sword & Shield
+    "ssh": "swsh1", "swsh1": "swsh1",
+    "rcl": "swsh2", "swsh2": "swsh2",
+    "daa": "swsh3", "swsh3": "swsh3",
+    "viv": "swsh4", "swsh4": "swsh4",
+    "shf": "swsh4.5", "swsh4.5": "swsh4.5",
+    "bst": "swsh5", "swsh5": "swsh5",
+    "cre": "swsh6", "swsh6": "swsh6",
+    "evs": "swsh7", "swsh7": "swsh7",
+    "fst": "swsh8", "swsh8": "swsh8",
+    "brs": "swsh9", "swsh9": "swsh9",
+    "asr": "swsh10", "swsh10": "swsh10",
+    "pgo": "pgo",
+    "lor": "swsh11", "swsh11": "swsh11",
+    "sit": "swsh12", "swsh12": "swsh12",
+    "crz": "swsh12.5", "swsh12.5": "swsh12.5",
+    # Sun & Moon
+    "sum": "sm1", "sm1": "sm1",
+    "gri": "sm2", "sm2": "sm2",
+    "bus": "sm3", "sm3": "sm3",
+    "cin": "sm4", "sm4": "sm4",
+    "upr": "sm5", "sm5": "sm5",
+    "fli": "sm6", "sm6": "sm6",
+    "ces": "sm7", "sm7": "sm7",
+    "lot": "sm8", "sm8": "sm8",
+    "teu": "sm9", "sm9": "sm9",
+    "unb": "sm10", "sm10": "sm10",
+    "unm": "sm11", "sm11": "sm11",
+    "hif": "sm115",
+    "cec": "sm12", "sm12": "sm12"
+}
+
 USD_TO_EUR_RATE = 1.08
 
 PC_HEADERS = {
@@ -101,7 +148,6 @@ PC_HEADERS = {
 }
 
 def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Optional[float]:
-    """Haalt de exacte veilingprijs in USD uit de PriceCharting producttabel voor een specifieke grade."""
     grade_str = str(grade or "9").strip().lower()
     
     target_ids = []
@@ -113,12 +159,9 @@ def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Option
         target_ids = ["grade-9-price", "cib_price"]
     elif "8" in grade_str:
         target_ids = ["grade-8-price"]
-    elif "7" in grade_str:
-        target_ids = ["grade-7-price"]
     else:
         target_ids = ["grade-9-price", "cib_price", "graded_price"]
 
-    # Poging 1: Zoeken naar specifieke TD element-IDs in PriceCharting HTML
     for tid in target_ids:
         pattern = rf'id=["\']{tid}["\'][^>]*>([\s\S]*?)</td>'
         match = re.search(pattern, html, re.IGNORECASE)
@@ -133,7 +176,6 @@ def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Option
                 except ValueError:
                     pass
 
-    # Poging 2: Tabelrijen matchen (bijv. "Grade 9" gevolgd door dollarteken)
     label_pattern = ""
     if "10" in grade_str:
         label_pattern = r'(?:Grade\s*10|PSA\s*10|Gem\s*Mint\s*10)'
@@ -141,10 +183,6 @@ def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Option
         label_pattern = r'(?:Grade\s*9\.5|Gem\s*Mint\s*9\.5)'
     elif "9" in grade_str:
         label_pattern = r'(?:Grade\s*9|Mint\s*9)'
-    elif "8" in grade_str:
-        label_pattern = r'(?:Grade\s*8)'
-    elif "7" in grade_str:
-        label_pattern = r'(?:Grade\s*7)'
 
     if label_pattern:
         row_pattern = rf'{label_pattern}[\s\S]*?\$([\d,]+(?:\.\d{2})?)'
@@ -160,7 +198,6 @@ def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Option
     return None
 
 async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, card_number: str, grade: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Doorzoekt PriceCharting en haalt de officiële koers op voor de graded slab."""
     clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', card_name).strip()
     clean_num = str(card_number).strip().lstrip("0") or str(card_number).strip()
     search_q = f"{clean_name} {clean_num}"
@@ -174,7 +211,6 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
         final_url = str(resp.url)
         html_content = resp.text
 
-        # Als PriceCharting direct doorverwijst naar de productpagina (/game/...)
         if "/game/" in final_url:
             usd_price = extract_pricecharting_grade_price(html_content, grade)
             if usd_price and usd_price > 0:
@@ -185,7 +221,6 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
                     "product_url": final_url
                 }
 
-        # Anders: zoek de eerste productlink in de zoekresultaten
         product_links = re.findall(r'href=["\'](/game/pokemon-[^"\']+)["\']', html_content)
         if product_links:
             target_slug = product_links[0]
@@ -210,74 +245,96 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
 
     return None
 
+def parse_tcgdex_pricing(data: dict) -> Optional[Dict[str, Any]]:
+    """Haalt accuraat de Cardmarket-koersen uit de TCGdex datastructuur."""
+    pricing = data.get("pricing", {})
+    cm = pricing.get("cardmarket", {}) or data.get("cardmarket", {})
+    prices = cm.get("prices", {}) if isinstance(cm.get("prices"), dict) else cm
+
+    trend = prices.get("trend") or prices.get("trend-holo") or prices.get("avg")
+    avg30 = prices.get("avg30") or prices.get("avg30-holo")
+    low = prices.get("low") or prices.get("low-holo")
+    cm_url = data.get("cardmarket", {}).get("url") or cm.get("url")
+    official_set = data.get("set", {}).get("name")
+
+    if trend or avg30 or low:
+        return {
+            "trend": trend,
+            "avg30": avg30,
+            "low": low,
+            "official_set": official_set,
+            "cm_url": cm_url
+        }
+    return None
+
 async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card_number: str, set_code: Optional[str]) -> Optional[Dict[str, Any]]:
-    """3-Traps vangnet voor TCGdex / Cardmarket NL data."""
     clean_num = str(card_number).strip().lstrip("0") or str(card_number).strip()
+    raw_num = str(card_number).strip()
     headers = {"Accept": "application/json"}
 
-    # Trap 1: Directe Set-Match indien setcode aanwezig is
+    # Stap 1: Bepaal kandidaat set-ID's (inclusief officiële setcode vertaler)
+    candidate_sets = []
     if set_code:
-        clean_set = set_code.strip().lower()
-        candidate_ids = [
-            f"{clean_set}-{card_number.strip()}",
-            f"{clean_set}-{clean_num}",
-            f"{clean_set}-{card_number.strip().zfill(3)}"
-        ]
-        for cid in candidate_ids:
+        c_code = set_code.strip().lower()
+        if c_code in SET_CODE_MAP:
+            candidate_sets.append(SET_CODE_MAP[c_code])
+        candidate_sets.append(c_code)
+
+    # Directe id lookup (bijv. sv03-200 of obf-200)
+    for cs in candidate_sets:
+        for cid in [f"{cs}-{raw_num}", f"{cs}-{clean_num}", f"{cs}-{raw_num.zfill(3)}"]:
             try:
                 url = f"https://api.tcgdex.net/v2/en/cards/{cid}"
-                resp = await client.get(url, headers=headers, timeout=3.0)
+                resp = await client.get(url, headers=headers, timeout=2.5)
                 if resp.status_code == 200:
-                    data = resp.json()
-                    cm = data.get("cardmarket", {})
-                    prices = cm.get("prices", {})
-                    if prices.get("trend") or prices.get("avg30") or prices.get("low"):
-                        return {
-                            "trend": prices.get("trend"),
-                            "avg30": prices.get("avg30"),
-                            "low": prices.get("low"),
-                            "official_set": data.get("set", {}).get("name"),
-                            "cm_url": cm.get("url")
-                        }
+                    parsed = parse_tcgdex_pricing(resp.json())
+                    if parsed:
+                        return parsed
             except Exception:
                 pass
 
-    # Trap 2: Zoeken op naam en nummer filteren (vangt Celebrations, promo's en speciale sets)
+    # Stap 2: Zoeken op naam in TCGdex
     try:
         clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', card_name).strip()
-        search_terms = [clean_name]
-        
-        words = clean_name.split()
-        if len(words) > 1 and words[-1].lower() not in ["gx", "v", "ex", "vmax", "vstar"]:
-            search_terms.append(words[-1])
-        elif len(words) > 2:
-            search_terms.append(words[1])
-
-        for st in search_terms:
-            search_url = f"https://api.tcgdex.net/v2/en/cards?name={quote_plus(st)}"
-            resp = await client.get(search_url, headers=headers, timeout=3.5)
-            if resp.status_code == 200:
-                results = resp.json()
-                if isinstance(results, list):
-                    for item in results:
-                        item_local = str(item.get("localId", "")).strip().lstrip("0")
-                        item_raw = str(item.get("localId", "")).strip()
-                        if item_local == clean_num or item_raw == str(card_number).strip():
-                            full_card_url = f"https://api.tcgdex.net/v2/en/cards/{item.get('id')}"
-                            card_resp = await client.get(full_card_url, headers=headers, timeout=3.5)
-                            if card_resp.status_code == 200:
-                                card_data = card_resp.json()
-                                cm = card_data.get("cardmarket", {})
-                                prices = cm.get("prices", {})
-                                return {
-                                    "trend": prices.get("trend"),
-                                    "avg30": prices.get("avg30"),
-                                    "low": prices.get("low"),
-                                    "official_set": card_data.get("set", {}).get("name"),
-                                    "cm_url": cm.get("url")
-                                }
+        search_url = f"https://api.tcgdex.net/v2/en/cards?name={quote_plus(clean_name)}"
+        resp = await client.get(search_url, headers=headers, timeout=3.0)
+        if resp.status_code == 200:
+            results = resp.json()
+            if isinstance(results, list):
+                for item in results:
+                    item_local = str(item.get("localId", "")).strip().lstrip("0")
+                    item_raw = str(item.get("localId", "")).strip()
+                    if item_local == clean_num or item_raw == raw_num:
+                        full_card_url = f"https://api.tcgdex.net/v2/en/cards/{item.get('id')}"
+                        card_resp = await client.get(full_card_url, headers=headers, timeout=2.5)
+                        if card_resp.status_code == 200:
+                            parsed = parse_tcgdex_pricing(card_resp.json())
+                            if parsed:
+                                return parsed
     except Exception as ex:
-        logger.warning(f"TCGdex fuzzy search mislukt voor {card_name}: {ex}")
+        logger.warning(f"TCGdex zoekopdracht mislukt voor {card_name}: {ex}")
+
+    # Stap 3: Fallback via PokemonTCG.io
+    try:
+        ptcg_url = f"https://api.pokemontcg.io/v2/cards?q=name:\"{clean_name}\" number:\"{clean_num}\""
+        ptcg_resp = await client.get(ptcg_url, headers=headers, timeout=3.0)
+        if ptcg_resp.status_code == 200:
+            p_data = ptcg_resp.json().get("data", [])
+            if p_data:
+                first_card = p_data[0]
+                cm_data = first_card.get("cardmarket", {})
+                cm_prices = cm_data.get("prices", {})
+                trend_val = cm_prices.get("trendPrice") or cm_prices.get("averageSellPrice")
+                if trend_val or cm_prices.get("lowPrice"):
+                    return {
+                        "trend": trend_val,
+                        "avg30": cm_prices.get("avg30") or cm_prices.get("averageSellPrice"),
+                        "low": cm_prices.get("lowPrice"),
+                        "official_set": first_card.get("set", {}).get("name"),
+                        "cm_url": cm_data.get("url")
+                    }
+    except Exception as ex:
+        logger.warning(f"PokemonTCG.io fallback mislukt voor {card_name}: {ex}")
 
     return None
 
@@ -406,7 +463,7 @@ def parse_ai_json(raw_text: str) -> List[Dict[str, Any]]:
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "2.6.0"}
+    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "2.7.0"}
 
 @app.post("/api/scan", response_model=List[CardResult])
 async def scan_cards(request: ScanRequest):
@@ -462,10 +519,10 @@ async def scan_cards(request: ScanRequest):
                 market_url = pc_data.get("product_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), True, company, grade_val)
             else:
                 final_price = 0.0
-                price_source = f"PriceCharting (Handmatig Invoeren)"
+                price_source = "PriceCharting (Handmatig Invoeren)"
                 market_url = generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), True, company, grade_val)
 
-        # Pijplijn 2: Singles (Cardmarket NL via TCGdex)
+        # Pijplijn 2: Singles (Cardmarket NL via TCGdex & PokemonTCG)
         else:
             if tcgdex_data and (tcgdex_data.get("trend") or tcgdex_data.get("avg30")):
                 trend_val = tcgdex_data.get("trend")
