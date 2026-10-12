@@ -62,9 +62,12 @@ def get_api_keys() -> List[str]:
     return keys
 
 CANDIDATE_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite"
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash"
 ]
 
 SYSTEM_PROMPT = """
@@ -494,7 +497,10 @@ async def call_gemini_vision(image_base64: str, mime_type: str) -> str:
                 "x-goog-api-key": key
             }
 
-            for model_name in CANDIDATE_MODELS:
+            # Probeer eerst de actieve kandidaten
+            model_pool = list(CANDIDATE_MODELS)
+
+            for model_name in model_pool:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
                 try:
                     logger.info(f"Scan uitvoeren met sleutel {key_idx + 1} op model {model_name}...")
@@ -519,11 +525,42 @@ async def call_gemini_vision(image_base64: str, mime_type: str) -> str:
                         last_error_msg = f"Sleutel {key_idx + 1} limiet bereikt (HTTP 429)"
                         logger.warning(last_error_msg)
                         break
+                    elif response.status_code == 404:
+                        logger.warning(f"Model {model_name} niet beschikbaar op deze sleutel (404), probeer volgend model...")
+                        continue
                     else:
                         last_error_msg = f"{model_name} (HTTP {response.status_code})"
                         logger.warning(f"Model {model_name} fout: {response.status_code} - {response.text[:150]}")
                 except Exception as ex:
                     last_error_msg = f"{model_name} Netwerkfout: {str(ex)}"
+
+            # Automatische fallback: vraag actieve modellenlijst op bij Google
+            try:
+                list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+                resp_list = await client.get(list_url, timeout=5.0)
+                if resp_list.status_code == 200:
+                    available = resp_list.json().get("models", [])
+                    dynamic_models = [
+                        m["name"].replace("models/", "")
+                        for m in available
+                        if "generateContent" in m.get("supportedGenerationMethods", [])
+                        and ("flash" in m.get("name", "").lower() or "pro" in m.get("name", "").lower())
+                    ]
+                    for dyn_model in dynamic_models:
+                        if dyn_model in model_pool:
+                            continue
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{dyn_model}:generateContent?key={key}"
+                        response = await client.post(url, headers=headers, json=payload)
+                        if response.status_code == 200:
+                            data = response.json()
+                            candidates = data.get("candidates", [])
+                            if candidates:
+                                content = candidates[0].get("content", {})
+                                parts = content.get("parts", [])
+                                if parts and "text" in parts[0]:
+                                    return parts[0]["text"]
+            except Exception as e_disc:
+                logger.warning(f"Dynamic model discovery fout: {e_disc}")
 
     raise HTTPException(status_code=502, detail=f"AI Analyse niet gelukt ({last_error_msg}). Probeer het over een minuutje nogmaals.")
 
