@@ -14,7 +14,7 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brimi-backend")
 
-app = FastAPI(title="BRIMI Precision Scanner API", version="2.7.0")
+app = FastAPI(title="BRIMI Precision Scanner API", version="2.8.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,22 +68,38 @@ Je bent de geavanceerde visuele inspectie-engine van BRIMI Scanner voor Pokémon
 Analyseer de afbeelding uiterst scherp. De foto kan één losse kaart, meerdere kaarten of een graded slab (PSA, CGC, BGS) bevatten.
 
 STRIKTE REGELS VOOR HERKENNING:
-1. KAARTNAAM: Lees letter voor letter de exacte Engelse naam linksboven op de kaart (bijv. "Palafin", "Goldeen", "Dewgong", "Clauncher").
-2. KAARTNUMMER & TOTAAL: Kijk linksonder (of rechtsonder bij oudere sets) naar het exacte nummer en set-totaal, bijv. "200/197", "087/084", "097/094" of "205/198".
-3. SETCODE: Kijk linksonder naar de officiële 3-lettercode in het blokje (bijv. OBF, PAL, SVI, MEW, PAR, PAF, TEF, TWM, SCR, SSP, PRE, UNM, CRZ).
+1. KAARTNAAM: Lees letter voor letter de exacte Engelse naam linksboven op de kaart (bijv. "Pikachu ex", "Palafin", "Goldeen", "Dewgong", "Clauncher").
+2. KAARTNUMMER & TOTAAL: Kijk linksonder (of rechtsonder bij oudere sets) naar het exacte nummer en set-totaal, bijv. "149/128", "200/197", "087/084", "097/094" of "205/198".
+3. SETCODE & SETNAAM: Kijk linksonder naar de officiële code in het blokje:
+   - 30C = 30th Celebration (Anniversary)
+   - PRE = Prismatic Evolutions
+   - SSP = Surging Sparks
+   - SCR = Stellar Crown
+   - SFA = Shrouded Fable
+   - TWM = Twilight Masquerade
+   - TEF = Temporal Forces
+   - PAF = Paldean Fates
+   - PAR = Paradox Rift
+   - MEW / 151 = Pokémon 151
+   - OBF = Obsidian Flames
+   - PAL = Paldea Evolved
+   - SVI = Scarlet & Violet Base
+   - CEL = 25th Celebrations
+   - CRZ = Crown Zenith
+   - UNM = Unified Minds
 4. SLABS: Als de kaart in een plastic PSA/CGC/BGS slab zit, lees dan de grader, de officiële grade (bijv. 9 of 10) en het certificaatnummer.
 
 Geef ALTIJD en UITSLUITEND een geldige JSON-array terug:
 [
   {
     "cardName": "Exacte Engelse naam van de Pokémon / Trainer",
-    "cardNumber": "Nummer van de kaart, bijv. 200 of 087",
-    "setTotal": "Totaal aantal kaarten in set indien zichtbaar, bijv. 197 of null",
-    "setCode": "Setcode linksonder indien leesbaar (bijv. OBF, SVI), anders null",
-    "setName": "Officiële setnaam (bijv. Scarlet & Violet: Obsidian Flames)",
+    "cardNumber": "Nummer van de kaart, bijv. 149 of 200",
+    "setTotal": "Totaal aantal kaarten in set indien zichtbaar, bijv. 128 of 197",
+    "setCode": "Setcode linksonder indien leesbaar (bijv. 30C, OBF, SVI), anders null",
+    "setName": "Officiële setnaam (bijv. 30th Celebration)",
     "language": "Engels, Japans, etc.",
     "languageCode": "EN, JP, CN, DE, FR",
-    "rarity": "Illustration Rare, Special Illustration Rare, Ultra Rare, Common, etc.",
+    "rarity": "Special Illustration Rare, Illustration Rare, Ultra Rare, Common, etc.",
     "isGraded": false,
     "gradingCompany": null,
     "grade": null,
@@ -94,49 +110,54 @@ Geef ALTIJD en UITSLUITEND een geldige JSON-array terug:
 
 # Officiële mapping van kaart-afkortingen naar TCGdex set-IDs
 SET_CODE_MAP = {
+    # 30th Anniversary & Special Sets
+    "30c": "30th", "30th": "30th", "cel30": "30th",
+    "cel": "cel25", "cel25": "cel25",
+    "me01": "me01", "me1": "me01",
+    "pbl": "pbl", "cri": "cri", "por": "por",
     # Scarlet & Violet
-    "svi": "sv01", "sv1": "sv01",
-    "pal": "sv02", "sv2": "sv02",
-    "obf": "sv03", "sv3": "sv03",
-    "mew": "sv03.5", "151": "sv03.5",
-    "par": "sv04", "sv4": "sv04",
-    "paf": "sv04.5", "sv4.5": "sv04.5",
-    "tef": "sv05", "sv5": "sv05",
-    "twm": "sv06", "sv6": "sv06",
-    "sfa": "sv06.5", "sv6.5": "sv06.5",
-    "scr": "sv07", "sv7": "sv07",
-    "ssp": "sv08", "sv8": "sv08",
     "pre": "sv08.5", "sv8.5": "sv08.5",
+    "ssp": "sv08", "sv8": "sv08",
+    "scr": "sv07", "sv7": "sv07",
+    "sfa": "sv06.5", "sv6.5": "sv06.5",
+    "twm": "sv06", "sv6": "sv06",
+    "tef": "sv05", "sv5": "sv05",
+    "paf": "sv04.5", "sv4.5": "sv04.5",
+    "par": "sv04", "sv4": "sv04",
+    "mew": "sv03.5", "151": "sv03.5",
+    "obf": "sv03", "sv3": "sv03",
+    "pal": "sv02", "sv2": "sv02",
+    "svi": "sv01", "sv1": "sv01",
     # Sword & Shield
-    "ssh": "swsh1", "swsh1": "swsh1",
-    "rcl": "swsh2", "swsh2": "swsh2",
-    "daa": "swsh3", "swsh3": "swsh3",
-    "viv": "swsh4", "swsh4": "swsh4",
-    "shf": "swsh4.5", "swsh4.5": "swsh4.5",
-    "bst": "swsh5", "swsh5": "swsh5",
-    "cre": "swsh6", "swsh6": "swsh6",
-    "evs": "swsh7", "swsh7": "swsh7",
-    "fst": "swsh8", "swsh8": "swsh8",
-    "brs": "swsh9", "swsh9": "swsh9",
-    "asr": "swsh10", "swsh10": "swsh10",
-    "pgo": "pgo",
-    "lor": "swsh11", "swsh11": "swsh11",
-    "sit": "swsh12", "swsh12": "swsh12",
     "crz": "swsh12.5", "swsh12.5": "swsh12.5",
+    "sit": "swsh12", "swsh12": "swsh12",
+    "lor": "swsh11", "swsh11": "swsh11",
+    "pgo": "pgo",
+    "asr": "swsh10", "swsh10": "swsh10",
+    "brs": "swsh9", "swsh9": "swsh9",
+    "fst": "swsh8", "swsh8": "swsh8",
+    "evs": "swsh7", "swsh7": "swsh7",
+    "cre": "swsh6", "swsh6": "swsh6",
+    "bst": "swsh5", "swsh5": "swsh5",
+    "shf": "swsh4.5", "swsh4.5": "swsh4.5",
+    "viv": "swsh4", "swsh4": "swsh4",
+    "daa": "swsh3", "swsh3": "swsh3",
+    "rcl": "swsh2", "swsh2": "swsh2",
+    "ssh": "swsh1", "swsh1": "swsh1",
     # Sun & Moon
-    "sum": "sm1", "sm1": "sm1",
-    "gri": "sm2", "sm2": "sm2",
-    "bus": "sm3", "sm3": "sm3",
-    "cin": "sm4", "sm4": "sm4",
-    "upr": "sm5", "sm5": "sm5",
-    "fli": "sm6", "sm6": "sm6",
-    "ces": "sm7", "sm7": "sm7",
-    "lot": "sm8", "sm8": "sm8",
-    "teu": "sm9", "sm9": "sm9",
-    "unb": "sm10", "sm10": "sm10",
-    "unm": "sm11", "sm11": "sm11",
+    "cec": "sm12", "sm12": "sm12",
     "hif": "sm115",
-    "cec": "sm12", "sm12": "sm12"
+    "unm": "sm11", "sm11": "sm11",
+    "unb": "sm10", "sm10": "sm10",
+    "teu": "sm9", "sm9": "sm9",
+    "lot": "sm8", "sm8": "sm8",
+    "ces": "sm7", "sm7": "sm7",
+    "fli": "sm6", "sm6": "sm6",
+    "upr": "sm5", "sm5": "sm5",
+    "cin": "sm4", "sm4": "sm4",
+    "bus": "sm3", "sm3": "sm3",
+    "gri": "sm2", "sm2": "sm2",
+    "sum": "sm1", "sm1": "sm1"
 }
 
 USD_TO_EUR_RATE = 1.08
@@ -148,7 +169,35 @@ PC_HEADERS = {
 }
 
 def extract_pricecharting_grade_price(html: str, grade: Optional[str]) -> Optional[float]:
-    grade_str = str(grade or "9").strip().lower()
+    if not grade:
+        # Ungraded / Raw single card
+        target_ids = ["used_price", "ungraded-price", "cib_price"]
+        for tid in target_ids:
+            pattern = rf'id=["\']{tid}["\'][^>]*>([\s\S]*?)</td>'
+            match = re.search(pattern, html, re.IGNORECASE)
+            if match:
+                cell_content = match.group(1)
+                p_match = re.search(r'\$\s*([\d,]+(?:\.\d{2})?)', cell_content)
+                if p_match:
+                    try:
+                        val = float(p_match.group(1).replace(",", ""))
+                        if val > 0:
+                            return val
+                    except ValueError:
+                        pass
+        
+        # Regex fallback voor de Ungraded rij
+        row_match = re.search(r'(?:Ungraded|Ongesorteerd)[\s\S]*?\$([\d,]+(?:\.\d{2})?)', html, re.IGNORECASE)
+        if row_match:
+            try:
+                val = float(row_match.group(1).replace(",", ""))
+                if val > 0:
+                    return val
+            except ValueError:
+                pass
+        return None
+
+    grade_str = str(grade).strip().lower()
     
     target_ids = []
     if "10" in grade_str:
@@ -246,7 +295,6 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
     return None
 
 def parse_tcgdex_pricing(data: dict) -> Optional[Dict[str, Any]]:
-    """Haalt accuraat de Cardmarket-koersen uit de TCGdex datastructuur."""
     pricing = data.get("pricing", {})
     cm = pricing.get("cardmarket", {}) or data.get("cardmarket", {})
     prices = cm.get("prices", {}) if isinstance(cm.get("prices"), dict) else cm
@@ -279,8 +327,10 @@ async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card
         if c_code in SET_CODE_MAP:
             candidate_sets.append(SET_CODE_MAP[c_code])
         candidate_sets.append(c_code)
+        if "30" in c_code:
+            candidate_sets.extend(["30th", "30c"])
 
-    # Directe id lookup (bijv. sv03-200 of obf-200)
+    # Directe id lookup (bijv. 30th-149, sv03-200, etc.)
     for cs in candidate_sets:
         for cid in [f"{cs}-{raw_num}", f"{cs}-{clean_num}", f"{cs}-{raw_num.zfill(3)}"]:
             try:
@@ -463,7 +513,7 @@ def parse_ai_json(raw_text: str) -> List[Dict[str, Any]]:
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "2.7.0"}
+    return {"status": "online", "app": "BRIMI Precision Scanner", "version": "2.8.0"}
 
 @app.post("/api/scan", response_model=List[CardResult])
 async def scan_cards(request: ScanRequest):
@@ -490,8 +540,9 @@ async def scan_cards(request: ScanRequest):
                 pc_tasks.append(fetch_pricecharting_data(client, c_name, c_num, c_grade))
                 tcgdex_tasks.append(asyncio.sleep(0, result=None))
             else:
+                # Voor singles: raadpleeg primair TCGdex én parallel PriceCharting als vangnet
                 tcgdex_tasks.append(fetch_tcgdex_resilient(client, c_name, c_num, c_set))
-                pc_tasks.append(asyncio.sleep(0, result=None))
+                pc_tasks.append(fetch_pricecharting_data(client, c_name, c_num, None))
 
         tcgdex_results = await asyncio.gather(*tcgdex_tasks, return_exceptions=True)
         pc_results = await asyncio.gather(*pc_tasks, return_exceptions=True)
@@ -501,7 +552,7 @@ async def scan_cards(request: ScanRequest):
         pc_data = pc_results[i] if (i < len(pc_results) and isinstance(pc_results[i], dict)) else None
         
         is_graded = bool(c.get("isGraded", False))
-        resolved_set_name = c.get("setName", "Onbekende Set")
+        resolved_set_name = c.get("setName", "30th Celebration" if str(c.get("setCode", "")).upper() == "30C" else "Onbekende Set")
         low_price_eur = None
         avg30_eur = None
         final_price = 0.0
@@ -522,7 +573,7 @@ async def scan_cards(request: ScanRequest):
                 price_source = "PriceCharting (Handmatig Invoeren)"
                 market_url = generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), True, company, grade_val)
 
-        # Pijplijn 2: Singles (Cardmarket NL via TCGdex & PokemonTCG)
+        # Pijplijn 2: Singles (Cardmarket NL via TCGdex & PokemonTCG met PriceCharting vangnet)
         else:
             if tcgdex_data and (tcgdex_data.get("trend") or tcgdex_data.get("avg30")):
                 trend_val = tcgdex_data.get("trend")
@@ -541,6 +592,11 @@ async def scan_cards(request: ScanRequest):
                 if tcgdex_data.get("official_set"):
                     resolved_set_name = tcgdex_data["official_set"]
                 market_url = tcgdex_data.get("cm_url") or generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
+            elif pc_data and pc_data.get("price_eur"):
+                # Eerste-dag release vangnet: PriceCharting beurskoers
+                final_price = float(pc_data["price_eur"])
+                price_source = "PriceCharting Marktprijs"
+                market_url = generate_market_url(c.get("cardName", ""), str(c.get("cardNumber", "")), False, None, None)
             else:
                 final_price = 0.0
                 price_source = "Cardmarket NL (Handmatig Invoeren)"
