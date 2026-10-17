@@ -7,6 +7,7 @@ import asyncio
 import logging
 from urllib.parse import quote_plus
 from typing import List, Optional, Dict, Any, Tuple
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -14,7 +15,43 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brimi-backend")
 
-app = FastAPI(title="BRIMI Universal Precision Scanner API", version="5.6.0")
+async def keep_alive_ping_loop():
+    """
+    Naadloze achtergrond keep-alive ping:
+    Voorkomt dat Render na 15 minuten inactiviteit in slaapstand valt.
+    Stuurt elke 8 minuten een lichte GET-ping naar het eigen publieke Render-adres.
+    """
+    await asyncio.sleep(25)
+    target_url = os.getenv("RENDER_EXTERNAL_URL", "https://brimi-scanner.onrender.com").rstrip("/")
+    ping_url = f"{target_url}/ping"
+    logger.info(f"⚡ BRIMI Naadloze Keep-Alive ping geactiveerd op {ping_url} (interval: 8 min).")
+
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.get(ping_url)
+                if r.status_code == 200:
+                    logger.info("🟢 Keep-alive ping succesvol verzonden. Render blijft 24/7 actief.")
+        except Exception as e:
+            logger.debug(f"Keep-alive ping poging (geen impact op werking): {e}")
+        
+        await asyncio.sleep(480)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ping_task = asyncio.create_task(keep_alive_ping_loop())
+    yield
+    ping_task.cancel()
+    try:
+        await ping_task
+    except asyncio.CancelledError:
+        pass
+
+app = FastAPI(
+    title="BRIMI Universal Precision Scanner API",
+    version="5.7.0",
+    lifespan=lifespan
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -174,6 +211,7 @@ UNIVERSAL_SET_MATRIX: Dict[str, Dict[str, str]] = {
     "sm9": {"tcgdex": "sm9", "cm": "TEU", "name": "Team Up"},
     "sm10": {"tcgdex": "sm10", "cm": "UNB", "name": "Unbroken Bonds"},
     "sm11": {"tcgdex": "sm11", "cm": "UNM", "name": "Unified Minds"},
+    "unm": {"tcgdex": "sm11", "cm": "UNM", "name": "Unified Minds"},
     "sm11.5": {"tcgdex": "sm11.5", "cm": "HIF", "name": "Hidden Fates"},
     "sm12": {"tcgdex": "sm12", "cm": "CEC", "name": "Cosmic Eclipse"},
 
@@ -349,31 +387,26 @@ def generate_market_url(card_name: str, card_number: str, cm_code: Optional[str]
     return f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={search_query}&sellerCountry=17&minCondition=2"
 
 def resolve_30th_celebration_pricing(card_number: str, card_name: str, rarity: str) -> Dict[str, Any]:
-    """
-    Geverifieerde Cardmarket NL marktprijzen voor de 30th Celebration jubileumset (2026).
-    Vangt de data-sync vertraging van externe API's op.
-    """
     num = str(card_number).split("/")[0].strip().lstrip("0")
     c_lower = card_name.lower()
     r_lower = rarity.lower()
 
-    # Exacte sleutelkaarten uit 30th Celebration
     exact_map = {
-        "149": {"low": 55.00, "trend": 38.65, "avg7": 54.66, "avg30": 76.65},  # Pikachu ex SIR (Daytime Parade)
-        "150": {"low": 65.00, "trend": 58.50, "avg7": 68.00, "avg30": 83.00},  # Pikachu ex SIR (Nighttime)
-        "151": {"low": 55.00, "trend": 48.00, "avg7": 56.00, "avg30": 73.00},  # Mewtwo ex SIR
-        "152": {"low": 95.00, "trend": 88.00, "avg7": 105.00, "avg30": 135.00}, # Mew ex SIR
-        "148": {"low": 22.00, "trend": 23.50, "avg7": 24.00, "avg30": 28.00},  # Greninja ex SIR
-        "147": {"low": 15.00, "trend": 17.00, "avg7": 16.50, "avg30": 20.00},  # Fuecoco ex SIR
-        "146": {"low": 7.50,  "trend": 8.50,  "avg7": 8.00,  "avg30": 9.50},   # Maushold IR
-        "157": {"low": 220.00, "trend": 210.00, "avg7": 235.00, "avg30": 250.00}, # Mewtwo ex Futuristic
-        "158": {"low": 260.00, "trend": 245.00, "avg7": 270.00, "avg30": 290.00}, # Mew ex Futuristic
-        "53":  {"low": 4.50,  "trend": 5.20,  "avg7": 5.00,  "avg30": 6.50},   # Pikachu ex Double Rare
-        "54":  {"low": 4.50,  "trend": 5.20,  "avg7": 5.00,  "avg30": 6.50},   # Pikachu ex Double Rare
-        "64":  {"low": 3.50,  "trend": 3.80,  "avg7": 3.60,  "avg30": 4.20},   # Mewtwo ex
-        "66":  {"low": 3.50,  "trend": 3.90,  "avg7": 3.80,  "avg30": 4.50},   # Mew ex
-        "70":  {"low": 4.00,  "trend": 4.50,  "avg7": 4.20,  "avg30": 5.00},   # Espeon ex
-        "71":  {"low": 4.50,  "trend": 5.00,  "avg7": 4.80,  "avg30": 5.50},   # Sylveon ex
+        "149": {"low": 55.00, "trend": 38.65, "avg7": 54.66, "avg30": 76.65},
+        "150": {"low": 65.00, "trend": 58.50, "avg7": 68.00, "avg30": 83.00},
+        "151": {"low": 55.00, "trend": 48.00, "avg7": 56.00, "avg30": 73.00},
+        "152": {"low": 95.00, "trend": 88.00, "avg7": 105.00, "avg30": 135.00},
+        "148": {"low": 22.00, "trend": 23.50, "avg7": 24.00, "avg30": 28.00},
+        "147": {"low": 15.00, "trend": 17.00, "avg7": 16.50, "avg30": 20.00},
+        "146": {"low": 7.50,  "trend": 8.50,  "avg7": 8.00,  "avg30": 9.50},
+        "157": {"low": 220.00, "trend": 210.00, "avg7": 235.00, "avg30": 250.00},
+        "158": {"low": 260.00, "trend": 245.00, "avg7": 270.00, "avg30": 290.00},
+        "53":  {"low": 4.50,  "trend": 5.20,  "avg7": 5.00,  "avg30": 6.50},
+        "54":  {"low": 4.50,  "trend": 5.20,  "avg7": 5.00,  "avg30": 6.50},
+        "64":  {"low": 3.50,  "trend": 3.80,  "avg7": 3.60,  "avg30": 4.20},
+        "66":  {"low": 3.50,  "trend": 3.90,  "avg7": 3.80,  "avg30": 4.50},
+        "70":  {"low": 4.00,  "trend": 4.50,  "avg7": 4.20,  "avg30": 5.00},
+        "71":  {"low": 4.50,  "trend": 5.00,  "avg7": 4.80,  "avg30": 5.50},
     }
 
     if num in exact_map:
@@ -382,7 +415,6 @@ def resolve_30th_celebration_pricing(card_number: str, card_name: str, rarity: s
         res["cm_url"] = f"https://www.cardmarket.com/en/Pokemon/Products/Search?searchString={quote_plus(card_name)}+30C+{num}&sellerCountry=17&minCondition=2"
         return res
 
-    # Classic Reprints
     if "classic" in r_lower or "classic" in c_lower:
         if "charizard" in c_lower:
             return {"low": 85.00, "trend": 75.00, "avg7": 80.00, "avg30": 95.00, "official_set": "30th Celebration", "cm_url": None}
@@ -394,7 +426,6 @@ def resolve_30th_celebration_pricing(card_number: str, card_name: str, rarity: s
             return {"low": 18.00, "trend": 15.00, "avg7": 16.50, "avg30": 19.00, "official_set": "30th Celebration", "cm_url": None}
         return {"low": 25.00, "trend": 20.00, "avg7": 22.00, "avg30": 26.00, "official_set": "30th Celebration", "cm_url": None}
 
-    # Zeldzaamheid categorieën
     if "special illustration" in r_lower:
         return {"low": 25.00, "trend": 22.00, "avg7": 24.00, "avg30": 28.00, "official_set": "30th Celebration", "cm_url": None}
     if "illustration" in r_lower:
@@ -405,6 +436,66 @@ def resolve_30th_celebration_pricing(card_number: str, card_name: str, rarity: s
         return {"low": 3.00, "trend": 2.80, "avg7": 3.00, "avg30": 3.50, "official_set": "30th Celebration", "cm_url": None}
 
     return {"low": 1.20, "trend": 0.90, "avg7": 1.00, "avg30": 1.40, "official_set": "30th Celebration", "cm_url": None}
+
+def extract_pricecharting_price(prod_html: str, grade: Optional[str]) -> Optional[float]:
+    """
+    Haalt de exacte veilingkoers op uit de PriceCharting product HTML.
+    Ondersteunt: PSA 10 (manual_only_price), Grade 9.5 (box_only_price),
+    Grade 9 (graded_price), Grade 8 (new_price), Grade 7 (complete_price).
+    Valt bij een graded slab NOOIT terug op de losse 'used_price'.
+    """
+    g = str(grade or "").strip().lower()
+
+    target_ids = []
+    if "10" in g:
+        target_ids = ["manual_only_price", "grade-10-price", "psa-10-price"]
+    elif "9.5" in g:
+        target_ids = ["box_only_price", "grade-95-price"]
+    elif "9" in g:
+        target_ids = ["graded_price", "grade-9-price", "psa-9-price"]
+    elif "8" in g:
+        target_ids = ["new_price", "grade-8-price", "psa-8-price"]
+    elif "7" in g:
+        target_ids = ["complete_price", "grade-7-price", "psa-7-price"]
+    elif not g:
+        target_ids = ["used_price", "ungraded-price"]
+
+    for t_id in target_ids:
+        alt_id = t_id.replace("_", "-")
+        patterns = [
+            rf'id=["\'](?:{t_id}|{alt_id})["\'][^>]*>[\s\S]*?\$([\d,]+\.?\d*)',
+            rf'class=["\'][^"\']*(?:{t_id}|{alt_id})[^"\']*["\'][^>]*>[\s\S]*?\$([\d,]+\.?\d*)',
+            rf'<td[^>]*id=["\'](?:{t_id}|{alt_id})["\'][^>]*>[\s\S]*?class=["\']price[^"\']*["\'][^>]*>[\s\S]*?\$([\d,]+\.?\d*)'
+        ]
+        for pat in patterns:
+            m = re.search(pat, prod_html, re.IGNORECASE)
+            if m:
+                try:
+                    val = float(m.group(1).replace(",", ""))
+                    if val > 0:
+                        return val
+                except ValueError:
+                    continue
+
+    # Fallback patroon op tabeltekst bij gewijzigde DOM-structuur
+    if "10" in g:
+        m = re.search(r'(?:PSA\s*10|Grade\s*10)[\s\S]*?class=["\']price[^"\']*["\'][^>]*>\s*\$([\d,]+\.?\d*)', prod_html, re.IGNORECASE)
+        if m:
+            return float(m.group(1).replace(",", ""))
+    elif "9" in g:
+        m = re.search(r'(?:Grade\s*9|PSA\s*9)[\s\S]*?class=["\']price[^"\']*["\'][^>]*>\s*\$([\d,]+\.?\d*)', prod_html, re.IGNORECASE)
+        if m:
+            return float(m.group(1).replace(",", ""))
+
+    # Alleen voor RAW kaarten toestaan om used_price uit te lezen
+    if not g:
+        m_raw = re.search(r'id=["\'](?:used_price|used-price|ungraded-price)["\'][^>]*>[\s\S]*?\$([\d,]+\.?\d*)', prod_html, re.IGNORECASE)
+        if not m_raw:
+            m_raw = re.search(r'class=["\']price js-price["\'][^>]*>[\s\S]*?\$([\d,]+\.?\d*)', prod_html, re.IGNORECASE)
+        if m_raw:
+            return float(m_raw.group(1).replace(",", ""))
+
+    return None
 
 async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, card_number: str, set_name: str, grade: Optional[str]) -> Optional[Dict[str, Any]]:
     clean_name = quote_plus(card_name)
@@ -429,12 +520,11 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
             if resp.status_code == 200:
                 html = resp.text
                 final_url = str(resp.url)
-
                 prod_html = html
                 product_url = final_url
 
                 if "/game/pokemon-" not in final_url:
-                    product_match = re.search(r'href="(/game/pokemon-[^"]+)"', html)
+                    product_match = re.search(r'href=["\'](/game/pokemon-[^"\']+)["\']', html)
                     if product_match:
                         product_url = f"https://www.pricecharting.com{product_match.group(1)}"
                         prod_resp = await client.get(product_url, headers=headers, timeout=6.0, follow_redirects=True)
@@ -443,51 +533,25 @@ async def fetch_pricecharting_data(client: httpx.AsyncClient, card_name: str, ca
                         else:
                             continue
                     else:
-                        table_match = re.search(r'class="price numeric used_price">[\s\S]*?\$([\d,]+\.?\d*)', html)
-                        if table_match:
-                            price_usd = float(table_match.group(1).replace(",", ""))
-                            if price_usd > 0:
-                                return {
-                                    "price_eur": round(price_usd / 1.08, 2),
-                                    "product_url": search_url,
-                                    "source": "PriceCharting Marktprijs"
-                                }
                         continue
 
-                grade_str = str(grade or "").strip()
-                price_usd = None
-
-                if "10" in grade_str:
-                    m10 = re.search(r'id="manual-only-price"[^>]*>[\s\S]*?\$([\d,]+\.?\d*)', prod_html) or re.search(r'id="grade-10-price"[^>]*>[\s\S]*?\$([\d,]+\.?\d*)', prod_html)
-                    if m10:
-                        price_usd = float(m10.group(1).replace(",", ""))
-                elif "9" in grade_str:
-                    m9 = re.search(r'id="grade-9-price"[^>]*>[\s\S]*?\$([\d,]+\.?\d*)', prod_html)
-                    if m9:
-                        price_usd = float(m9.group(1).replace(",", ""))
-
-                if not price_usd:
-                    m_ungraded = re.search(r'id="ungraded-price"[^>]*>[\s\S]*?\$([\d,]+\.?\d*)', prod_html)
-                    if not m_ungraded:
-                        m_ungraded = re.search(r'class="price js-price">[\s\S]*?\$([\d,]+\.?\d*)', prod_html)
-                    if m_ungraded:
-                        price_usd = float(m_ungraded.group(1).replace(",", ""))
+                price_usd = extract_pricecharting_price(prod_html, grade)
 
                 if price_usd and price_usd > 0:
                     price_eur = round(price_usd / 1.08, 2)
                     return {
                         "price_eur": price_eur,
                         "product_url": product_url,
-                        "source": "PriceCharting Marktprijs"
+                        "source": f"PriceCharting {'Slab Koers' if grade else 'Marktprijs'}"
                     }
         except Exception as e:
-            logger.warning(f"PriceCharting lookup exception ({query}): {e}")
+            logger.warning(f"PriceCharting lookup uitzondering ({query}): {e}")
 
     return None
 
 async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card_number: str, tcgdex_set_id: Optional[str], set_name: str) -> Optional[Dict[str, Any]]:
     clean_num = str(card_number).split("/")[0].strip()
-    headers = {"Accept": "application/json", "User-Agent": "BRIMI-Scanner/5.6"}
+    headers = {"Accept": "application/json", "User-Agent": "BRIMI-Scanner/5.7"}
 
     if tcgdex_set_id:
         url_candidates = [
@@ -561,12 +625,8 @@ async def fetch_tcgdex_resilient(client: httpx.AsyncClient, card_name: str, card
     return None
 
 def calculate_nl_lowest_price(tcgdex_data: Optional[Dict[str, Any]], pc_data: Optional[Dict[str, Any]], is_graded: bool) -> Tuple[float, str, Optional[float], Optional[float], Optional[float]]:
-    """
-    Berekent de meest accurate LAAGSTE VRAAGPRIJS in Nederland voor Near Mint Engelse singles.
-    Combineert Cardmarket NL (Bodem, 7-daags gemiddelde, Trend) en PriceCharting marktdata.
-    """
     if is_graded:
-        if pc_data and pc_data.get("price_eur"):
+        if pc_data and pc_data.get("price_eur") and float(pc_data["price_eur"]) > 0:
             p = float(pc_data["price_eur"])
             return (p, "PriceCharting Slab Koers", None, None, None)
         return (0.0, "PriceCharting (Handmatig Invoeren)", None, None, None)
@@ -581,7 +641,6 @@ def calculate_nl_lowest_price(tcgdex_data: Optional[Dict[str, Any]], pc_data: Op
     final_price = 0.0
     price_source = ""
 
-    # Geval 1: PriceCharting en Cardmarket zijn beide beschikbaar
     if pc_val and pc_val > 0:
         if avg7_val and avg7_val > 0:
             final_price = round(min(pc_val, avg7_val) if abs(pc_val - avg7_val) < (avg7_val * 0.4) else pc_val, 2)
@@ -596,10 +655,7 @@ def calculate_nl_lowest_price(tcgdex_data: Optional[Dict[str, Any]], pc_data: Op
             final_price = round(pc_val, 2)
             price_source = "Cardmarket NL / PriceCharting Benchmark"
 
-    # Geval 2: Alleen Cardmarket (TCGdex of 30th Resolver) beschikbaar
     elif tcgdex_data and (low_val or avg7_val or trend_val or avg1_val or avg30_val):
-        # Prioriteit voor actuele NL bodem:
-        # 1. low_val als deze realistisch is t.o.v. de markt
         if low_val and trend_val and low_val >= (trend_val * 0.45):
             final_price = round(low_val, 2)
             price_source = "Cardmarket NL Laagste Vraagprijs"
@@ -616,7 +672,6 @@ def calculate_nl_lowest_price(tcgdex_data: Optional[Dict[str, Any]], pc_data: Op
             final_price = round(avg30_val, 2)
             price_source = "Cardmarket NL 30d Gemiddelde"
 
-    # Geval 3: Alleen PriceCharting beschikbaar
     elif pc_val and pc_val > 0:
         final_price = round(pc_val, 2)
         price_source = "Cardmarket NL / PriceCharting Benchmark"
@@ -740,8 +795,17 @@ def read_root():
     return {
         "status": "online",
         "app": "BRIMI Universal Precision Scanner API",
-        "version": "5.6.0",
-        "matrix_sets": len(UNIVERSAL_SET_MATRIX)
+        "version": "5.7.0",
+        "matrix_sets": len(UNIVERSAL_SET_MATRIX),
+        "keep_alive": "enabled"
+    }
+
+@app.get("/ping")
+def ping_endpoint():
+    return {
+        "status": "ok",
+        "service": "BRIMI Scanner API",
+        "active": True
     }
 
 @app.post("/api/scan", response_model=List[CardResult])
@@ -790,7 +854,6 @@ async def scan_cards(request: ScanRequest):
 
         tcgdex_id, cm_code, resolved_set_name = resolve_set_metadata(c.get("setCode"), c.get("setName"), c_num_val, c_name_val)
 
-        # 30th Celebration fallback als de TCGdex API-feed nog niet gesynchroniseerd is
         if (cm_code == "30C" or "30th" in resolved_set_name.lower()) and not tcgdex_data:
             tcgdex_data = resolve_30th_celebration_pricing(c_num_val, c_name_val, c_rarity_val)
 
